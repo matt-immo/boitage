@@ -393,6 +393,7 @@ let tour=null;                // {order:[ids], distance}
 let liveSession={count:0, logId:null}; let liveSaveT=null;
 let searchMarker=null, lastSearchQuery='';
 let heatLayer=null, heatOn=false, zoneFilter='all', todoDismissed=false;
+let sync={key:'',binId:''}, localTS=0, pushT=null, syncStatusText='Non configurée';
 
 /* ===================== Carte ===================== */
 function initMap(){
@@ -546,10 +547,10 @@ async function addZoneByCP(){
 }
 
 /* ===================== Persistance ===================== */
-async function saveProspects(){ await Store.set('boitage_prospects', JSON.stringify(prospects)); }
-async function saveZones(){ await Store.set('boitage_zones', JSON.stringify(zones)); }
-async function saveLogs(){ await Store.set('boitage_logs', JSON.stringify(logs)); }
-async function saveObj(){ await Store.set('boitage_objectif', String(baseObjectif)); await Store.set('boitage_objectifs', JSON.stringify(objectifs)); }
+async function saveProspects(){ await Store.set('boitage_prospects', JSON.stringify(prospects)); touchSync(); }
+async function saveZones(){ await Store.set('boitage_zones', JSON.stringify(zones)); touchSync(); }
+async function saveLogs(){ await Store.set('boitage_logs', JSON.stringify(logs)); touchSync(); }
+async function saveObj(){ await Store.set('boitage_objectif', String(baseObjectif)); await Store.set('boitage_objectifs', JSON.stringify(objectifs)); touchSync(); }
 function effObjectif(mk){
   if(objectifs[mk]!=null) return objectifs[mk];
   const ks=Object.keys(objectifs).filter(k=>k<mk).sort();
@@ -1098,20 +1099,36 @@ function launchNav(){
 
 /* ===================== Panneau PLUS ===================== */
 function renderPlus(){
+  const configured = !!(sync.key && sync.binId);
+  const syncBlock = configured ? `
+    <div class="srow"><div class="st"><b>Synchro active ✓</b><p id="syncStatus">${esc(syncStatusText)}</p></div><button id="syncNow">Synchroniser</button></div>
+    <div class="hint" style="margin:-2px 0 6px">ID du bac (à coller sur ton autre appareil) :<br><b style="word-break:break-all">${esc(sync.binId)}</b></div>
+    <button class="btn btn-g btn-w" id="syncOff" style="margin-bottom:6px">Déconnecter la synchro</button>
+  ` : `
+    <div class="hint" id="syncStatus" style="margin-bottom:8px">${esc(syncStatusText)}</div>
+    <div class="field"><label>Clé d'accès</label><input id="syncKey" placeholder="$2a$10$..." autocomplete="off"></div>
+    <div class="field"><label>ID du bac (laisse vide sur le 1ᵉʳ appareil)</label><input id="syncBin" placeholder="à coller sur le 2ᵉ appareil" autocomplete="off"></div>
+    <button class="btn btn-p btn-w" id="syncOn" style="margin-bottom:6px">Activer la synchro</button>
+    <div class="hint">Crée un compte gratuit sur jsonbin.io, génère une <b>clé d'accès</b> (permissions Read + Create + Update), et colle-la ici. Sur le 1ᵉʳ appareil, laisse l'ID vide ; copie ensuite l'ID affiché et colle-le (avec la même clé) sur le 2ᵉ appareil.</div>
+  `;
   const body=`
+    <div class="secttl">Synchronisation en ligne</div>
+    ${syncBlock}
+    <div class="secttl">Sauvegarde</div>
     <div class="srow"><div class="si">${ICN.dl}</div><div class="st"><b>Sauvegarde (export)</b><p>Enregistre toutes tes données dans un fichier. À garder précieusement.</p></div><button id="expJson">Exporter</button></div>
-    <div class="srow"><div class="si">${ICN.up}</div><div class="st"><b>Restaurer (import)</b><p>Recharge une sauvegarde, ou transfère vers un autre appareil.</p></div><button id="impJson">Importer</button></div>
+    <div class="srow"><div class="si">${ICN.up}</div><div class="st"><b>Restaurer (import)</b><p>Recharge une sauvegarde depuis un fichier.</p></div><button id="impJson">Importer</button></div>
     <div class="srow"><div class="si">${ICN.sheet}</div><div class="st"><b>Export Excel (CSV)</b><p>Liste de tes lieux ouvrable dans Excel / Sheets.</p></div><button id="expCsv">CSV</button></div>
-    <div class="secttl">Synchronisation</div>
-    <div class="hint" style="line-height:1.6">
-      <b>Mode en ligne (recommandé, sync automatique) :</b> ouvre cette app <b>depuis l'app Claude</b>, connecté à ton compte. Tes données sont alors enregistrées en ligne sur ton compte et se retrouvent automatiquement sur tous tes appareils (téléphone, tablette) — sans transfert. Les changements de l'autre appareil apparaissent quand tu reviens sur l'app.<br><br>
-      <b>Mode hors-ligne (icône sur l'écran d'accueil) :</b> pratique en plein écran sur le terrain même sans réseau, mais les données restent sur l'appareil. Dans ce cas, utilise Export/Import pour passer de l'un à l'autre.<br><br>
-      Dans tous les cas, fais un <b>Export</b> de temps en temps comme sauvegarde de sécurité.
-    </div>`;
-  setSheet('Plus','Sauvegarde & réglages',body); openSheet();
+    <div class="hint" style="margin-top:10px;line-height:1.5">Tes identifiants de synchro restent <b>sur cet appareil</b>, jamais dans le fichier en ligne. Garde un verrouillage d'écran et fais un export de sécurité de temps en temps.</div>`;
+  setSheet('Plus','Synchro & sauvegarde',body); openSheet();
   document.getElementById('expJson').onclick=exportJson;
   document.getElementById('impJson').onclick=()=>document.getElementById('file').click();
   document.getElementById('expCsv').onclick=exportCsv;
+  if(configured){
+    document.getElementById('syncNow').onclick=syncNow;
+    document.getElementById('syncOff').onclick=disconnectSync;
+  } else {
+    document.getElementById('syncOn').onclick=()=>activateSync(gv('syncKey'),gv('syncBin'));
+  }
 }
 function exportJson(){
   const data={version:2,exported:new Date().toISOString(),prospects,zones,logs,objectifs,baseObjectif,objectif:baseObjectif};
@@ -1321,6 +1338,69 @@ document.getElementById('legendBtn').onclick=openLegend;
 document.getElementById('todoGo').onclick=openTodo;
 document.getElementById('todoX').onclick=()=>{ todoDismissed=true; document.getElementById('todobar').classList.remove('show'); };
 
+/* ===================== Synchronisation cloud (jsonbin) ===================== */
+function nowHM(){ const d=new Date(); return d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+function snapshot(){ return {prospects,zones,logs,objectifs,baseObjectif,updatedAt:localTS}; }
+function setSyncStatus(t){ syncStatusText=t; const el=document.getElementById('syncStatus'); if(el) el.textContent=t; }
+function touchSync(){ localTS=Date.now(); try{localStorage.setItem('boitage_ts',String(localTS));}catch(e){} schedulePush(); }
+function schedulePush(){ if(!sync.key||!sync.binId) return; clearTimeout(pushT); pushT=setTimeout(pushSync,2500); }
+async function saveSyncCfg(){ await Store.set('boitage_sync', JSON.stringify(sync)); }
+async function applySnapshot(d){
+  prospects=d.prospects||[]; zones=d.zones||[]; logs=d.logs||[]; objectifs=d.objectifs||{}; if(d.baseObjectif!=null) baseObjectif=d.baseObjectif;
+  localTS=d.updatedAt||Date.now();
+  await Store.set('boitage_prospects',JSON.stringify(prospects));
+  await Store.set('boitage_zones',JSON.stringify(zones));
+  await Store.set('boitage_logs',JSON.stringify(logs));
+  await Store.set('boitage_objectifs',JSON.stringify(objectifs));
+  await Store.set('boitage_objectif',String(baseObjectif));
+  try{localStorage.setItem('boitage_ts',String(localTS));}catch(e){}
+  renderZones(); renderMarkers(); renderTodoBanner();
+}
+async function pushSync(){
+  if(!sync.key||!sync.binId) return;
+  try{
+    setSyncStatus('Envoi…');
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+sync.binId,{method:'PUT',headers:{'Content-Type':'application/json','X-Access-Key':sync.key},body:JSON.stringify(snapshot())});
+    if(!r.ok) throw 0;
+    setSyncStatus('Synchronisé à '+nowHM());
+  }catch(e){ setSyncStatus('Échec de l\'envoi (vérifie la connexion)'); }
+}
+async function pullSync(silent){
+  if(!sync.key||!sync.binId) return;
+  try{
+    if(!silent) setSyncStatus('Récupération…');
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+sync.binId+'/latest',{headers:{'X-Access-Key':sync.key,'X-Bin-Meta':'false'}});
+    if(!r.ok) throw 0;
+    const d=await r.json();
+    if(d && d.updatedAt && d.updatedAt>localTS){ await applySnapshot(d); setSyncStatus('Mis à jour à '+nowHM()); }
+    else if(!silent) setSyncStatus('Déjà à jour ('+nowHM()+')');
+  }catch(e){ if(!silent) setSyncStatus('Échec de la récupération'); }
+}
+async function syncNow(){ await pullSync(false); await pushSync(); if(document.getElementById('syncStatus')) renderPlus(); }
+async function activateSync(key,binId){
+  key=(key||'').trim(); binId=(binId||'').trim();
+  if(!key){ toast('Colle ta clé d\'accès'); return; }
+  sync.key=key;
+  if(binId){
+    sync.binId=binId; await saveSyncCfg(); setSyncStatus('Connexion…'); await pullSync(false); toast('Connecté à la synchro');
+  } else {
+    setSyncStatus('Création du bac…');
+    if(!localTS) localTS=Date.now();
+    try{
+      const r=await fetch('https://api.jsonbin.io/v3/b',{method:'POST',headers:{'Content-Type':'application/json','X-Access-Key':key,'X-Bin-Name':'boitage','X-Bin-Private':'true'},body:JSON.stringify(snapshot())});
+      if(!r.ok) throw 0;
+      const j=await r.json();
+      sync.binId=(j.metadata&&j.metadata.id)||''; if(!sync.binId) throw 0;
+      await saveSyncCfg(); setSyncStatus('Synchro activée à '+nowHM()); toast('Synchro activée');
+    }catch(e){ setSyncStatus('Échec : clé invalide ou permissions manquantes'); toast('Échec : vérifie la clé et ses permissions'); sync={key:'',binId:''}; return; }
+  }
+  renderPlus();
+}
+async function disconnectSync(){
+  if(!confirm('Déconnecter la synchro sur cet appareil ? (tes données restent ici)')) return;
+  sync={key:'',binId:''}; await Store.set('boitage_sync', JSON.stringify(sync)); setSyncStatus('Non configurée'); renderPlus();
+}
+
 /* ===================== Sync : rechargement quand l'app reprend le focus ===================== */
 async function reloadFromStore(){
   // ne pas écraser une saisie en cours
@@ -1332,6 +1412,7 @@ async function reloadFromStore(){
   try{ const o=await Store.get('boitage_objectif'); if(o)baseObjectif=parseInt(o,10)||baseObjectif; }catch(e){}
   try{ const om=await Store.get('boitage_objectifs'); if(om)objectifs=JSON.parse(om); }catch(e){}
   renderZones(); renderMarkers(); renderTodoBanner();
+  if(sync.key&&sync.binId) pullSync(true);
 }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reloadFromStore(); });
 window.addEventListener('focus',reloadFromStore);
@@ -1344,7 +1425,10 @@ window.addEventListener('focus',reloadFromStore);
   try{ const l=await Store.get('boitage_logs'); if(l)logs=JSON.parse(l); }catch(e){}
   try{ const o=await Store.get('boitage_objectif'); if(o)baseObjectif=parseInt(o,10)||baseObjectif; }catch(e){}
   try{ const om=await Store.get('boitage_objectifs'); if(om)objectifs=JSON.parse(om); }catch(e){}
+  try{ const sc=await Store.get('boitage_sync'); if(sc){const o=JSON.parse(sc); if(o&&o.key){sync=o; syncStatusText='Synchro active';}} }catch(e){}
+  try{ const ts=await Store.get('boitage_ts'); if(ts)localTS=parseInt(ts,10)||0; }catch(e){}
   renderZones(); renderMarkers(); renderTodoBanner();
+  if(sync.key&&sync.binId) pullSync(true);
   if(prospects.length){ try{ map.fitBounds(L.latLngBounds(prospects.map(p=>[p.lat,p.lng])).pad(.25)); }catch(e){} }
 })();
 </script>
