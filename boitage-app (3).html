@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Boîtage">
+<meta name="theme-color" content="#13302c">
+<title>Boîtage · Ouest Réunion</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#13302c;
+    --ink-2:#1d423c;
+    --paper:#f6f2ea;
+    --paper-2:#ece5d8;
+    --line:#d8cfbe;
+    --muted:#6f7d76;
+    --accent:#f0552d;
+    --accent-2:#ff7a52;
+    --aboiter:#ee8a2e;
+    --boite:#3f7cb6;
+    --rdv:#8155d6;
+    --client:#2f9d57;
+    --perdu:#9b9389;
+    --z-todo:#ee8a2e;
+    --z-doing:#3f7cb6;
+    --z-done:#2f9d57;
+    --shadow:0 8px 30px rgba(19,48,44,.16);
+    --safe-b:env(safe-area-inset-bottom,0px);
+    --safe-t:env(safe-area-inset-top,0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:'Hanken Grotesk',sans-serif;color:var(--ink);background:var(--ink);overflow:hidden;overscroll-behavior:none}
+  button,input,select,textarea{font-family:inherit}
+
+  #map{position:fixed;inset:0;background:#cfe0db;z-index:1}
+  .leaflet-container{font-family:'Hanken Grotesk',sans-serif}
+  .leaflet-top.leaflet-left{top:calc(var(--safe-t) + 64px)}
+
+  /* Top bar */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:1200;
+    padding:calc(var(--safe-t) + 9px) 12px 9px;
+    display:flex;gap:9px;align-items:center;
+    background:linear-gradient(180deg,rgba(19,48,44,.92),rgba(19,48,44,.0));
+    pointer-events:none;
+  }
+  .topbar > *{pointer-events:auto}
+  .brand{display:flex;align-items:center;gap:8px;color:var(--paper);font-family:'Bricolage Grotesque';font-weight:800;font-size:17px;letter-spacing:-.3px;white-space:nowrap}
+  .brand .d{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(240,85,45,.3)}
+  .search{
+    flex:1;min-width:0;background:var(--paper);border:none;border-radius:11px;
+    padding:11px 13px;font-size:14.5px;color:var(--ink);box-shadow:var(--shadow);
+  }
+  .search:focus{outline:2px solid var(--accent)}
+  .iconbtn{
+    width:44px;height:44px;border-radius:11px;border:none;background:var(--paper);
+    color:var(--ink);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .iconbtn svg{width:21px;height:21px}
+  .iconbtn:active{transform:scale(.94)}
+
+  /* FAB */
+  .fab{
+    position:fixed;right:16px;bottom:calc(var(--safe-b) + 78px);z-index:1300;
+    width:58px;height:58px;border-radius:18px;border:none;background:var(--accent);color:#fff;
+    box-shadow:0 10px 26px rgba(240,85,45,.45);display:flex;align-items:center;justify-content:center;
+  }
+  .fab svg{width:28px;height:28px}
+  .fab:active{transform:scale(.93)}
+  .fab.armed{background:var(--ink)}
+
+  /* Bottom nav */
+  .nav{
+    position:fixed;left:0;right:0;bottom:0;z-index:1400;
+    background:var(--paper);border-top:1px solid var(--line);
+    display:flex;padding:6px 4px calc(var(--safe-b) + 6px);box-shadow:0 -6px 24px rgba(19,48,44,.1);
+  }
+  .nav button{
+    flex:1;border:none;background:none;padding:6px 1px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    color:var(--muted);font-size:9.5px;font-weight:600;letter-spacing:.1px;min-width:0;
+  }
+  .nav button svg{width:22px;height:22px}
+  .nav button.active{color:var(--accent)}
+  .nav button:active{transform:scale(.93)}
+
+  /* Sheet */
+  .sheet-back{position:fixed;inset:0;z-index:1500;background:rgba(19,48,44,.4);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .25s}
+  .sheet-back.show{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:1600;
+    background:var(--paper);border-radius:22px 22px 0 0;
+    max-height:88vh;display:flex;flex-direction:column;
+    transform:translateY(110%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+    box-shadow:0 -10px 40px rgba(19,48,44,.3);padding-bottom:var(--safe-b);
+  }
+  .sheet.show{transform:translateY(0)}
+  .grip{width:42px;height:4.5px;border-radius:3px;background:var(--line);margin:9px auto 4px}
+  .sheet-head{padding:4px 20px 12px;border-bottom:1px solid var(--line);display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+  .sheet-head h2{font-family:'Bricolage Grotesque';font-weight:800;font-size:22px;letter-spacing:-.4px}
+  .sheet-head .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .sheet-body{overflow-y:auto;padding:14px 18px calc(28px + var(--safe-b));-webkit-overflow-scrolling:touch}
+  .closex{width:34px;height:34px;border-radius:10px;border:none;background:var(--paper-2);color:var(--ink);font-size:18px;flex-shrink:0}
+
+  @media(min-width:820px){
+    .sheet{left:auto;right:0;top:0;bottom:0;width:430px;max-height:none;border-radius:0;transform:translateX(110%)}
+    .sheet.show{transform:translateX(0)}
+    .grip{display:none}
+    .sheet-head{padding-top:calc(var(--safe-t) + 16px)}
+  }
+
+  /* Filters */
+  .filters{display:flex;gap:7px;overflow-x:auto;padding:12px 0 14px;margin:-4px 0 0}
+  .filters::-webkit-scrollbar{display:none}
+  .chip{
+    white-space:nowrap;border:1.5px solid var(--line);background:#fff;border-radius:20px;
+    padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:6px;
+  }
+  .chip .sw{width:9px;height:9px;border-radius:50%}
+  .chip.on{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+  .chip .ct{opacity:.7;font-weight:700}
+
+  /* Cards */
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:10px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--cc,#ccc)}
+  .card .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .card .nm{font-family:'Bricolage Grotesque';font-weight:700;font-size:17px;line-height:1.12;letter-spacing:-.2px;padding-left:6px}
+  .prio{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:20px;white-space:nowrap}
+  .prio.haute{background:#fbded4;color:#bb3c12}.prio.moyenne{background:#fbeed4;color:#8f6614}.prio.basse{background:#e7eef0;color:#4f7186}
+  .card .ad{font-size:12.5px;color:var(--muted);margin:6px 0 0 6px;line-height:1.35}
+  .badge{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:20px;color:#fff;display:inline-block;margin:9px 0 0 6px}
+  .dates{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 0 6px}
+  .dt{font-size:11px;padding:4px 9px;border-radius:8px;background:var(--paper-2);display:inline-flex;gap:5px;align-items:center}
+  .dt.warn{background:#fbe2d6;color:#b5360f;font-weight:600}
+  .acts{display:flex;gap:7px;margin:11px 0 0 6px;flex-wrap:wrap}
+  .act{flex:1;min-width:84px;border:1px solid var(--line);background:var(--paper);border-radius:9px;padding:8px;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:5px;color:var(--ink);text-decoration:none}
+  .act svg{width:15px;height:15px}
+  .act.edit{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .act:active{transform:scale(.96)}
+
+  .empty{text-align:center;color:var(--muted);padding:46px 20px;font-size:13.5px;line-height:1.6}
+  .empty .big{font-size:40px;display:block;margin-bottom:10px;opacity:.4}
+
+  /* Form */
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
+  .field input,.field textarea,.field select{
+    width:100%;border:1.5px solid var(--line);border-radius:11px;padding:11px 13px;font-size:15px;background:#fff;color:var(--ink);
+  }
+  .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--accent)}
+  .field textarea{resize:vertical;min-height:62px}
+  .row2{display:flex;gap:10px}.row2 .field{flex:1}
+  .addr-line{display:flex;gap:8px}
+  .geob{border:1.5px solid var(--line);background:var(--paper-2);border-radius:11px;padding:0 14px;font-weight:600;font-size:13px;white-space:nowrap}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+  .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .sopt{border:1.5px solid var(--line);border-radius:11px;padding:11px 8px;font-size:13px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center;gap:7px;background:#fff}
+  .sopt .sw{width:11px;height:11px;border-radius:50%}
+  .sopt.sel{border-color:var(--ink);box-shadow:0 3px 8px rgba(19,48,44,.12)}
+  .formfoot{display:flex;gap:10px;margin-top:8px}
+  .btn{border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px}
+  .btn:active{transform:scale(.97)}
+  .btn-p{background:var(--accent);color:#fff;flex:2}
+  .btn-g{background:var(--paper-2);color:var(--ink);border:1px solid var(--line);flex:1}
+  .btn-d{background:#f6dcd2;color:#bb3c12;flex:1}
+  .btn-w{width:100%}
+
+  /* Counter */
+  .objcard{background:var(--ink);color:var(--paper);border-radius:18px;padding:20px;text-align:center;position:relative;overflow:hidden}
+  .objcard .mlabel{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:#9fb4ae;display:flex;align-items:center;justify-content:center;gap:14px}
+  .marrow{background:rgba(255,255,255,.1);border:none;color:var(--paper);width:28px;height:28px;border-radius:8px;font-size:15px}
+  .bignum{font-family:'Bricolage Grotesque';font-weight:800;font-size:54px;line-height:1;margin:10px 0 2px;letter-spacing:-1px}
+  .bignum small{font-size:24px;color:#9fb4ae;font-weight:500}
+  .pct{font-size:13px;color:var(--accent-2);font-weight:700;margin-bottom:14px}
+  .bar{height:13px;border-radius:10px;background:rgba(255,255,255,.14);overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:10px;transition:width .4s;box-shadow:0 0 12px rgba(240,85,45,.5)}
+  .objedit{display:flex;gap:8px;align-items:center;margin-top:13px}
+  .objedit input{flex:1;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:var(--paper);border-radius:10px;padding:9px 12px;font-size:14px}
+  .objedit input:focus{outline:none;border-color:var(--accent)}
+  .objedit button{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 15px;font-weight:700;font-size:13px}
+  .quick{display:flex;gap:8px;margin:16px 0 8px}
+  .quick button{flex:1;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:13px 4px;font-weight:700;font-size:15px;color:var(--ink)}
+  .quick button:active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .addlog{display:flex;gap:8px;margin-bottom:6px}
+  .addlog input{flex:1;border:1.5px solid var(--line);border-radius:11px;padding:11px;font-size:15px}
+  .addlog button{background:var(--ink);color:var(--paper);border:none;border-radius:11px;padding:0 18px;font-weight:700}
+  .logitem{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;background:#fff;border:1px solid var(--line);border-radius:11px;margin-bottom:8px}
+  .logitem .lc{font-family:'Bricolage Grotesque';font-weight:700;font-size:16px}
+  .logitem .ld{font-size:12px;color:var(--muted)}
+  .logitem .lx{border:none;background:none;color:#bb3c12;font-size:18px;padding:4px 8px}
+  .secttl{font-family:'Bricolage Grotesque';font-weight:700;font-size:15px;margin:20px 0 10px;display:flex;justify-content:space-between;align-items:baseline}
+  .secttl span{font-size:12px;color:var(--muted);font-weight:500}
+
+  /* Settings rows */
+  .srow{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .srow:last-child{border-bottom:none}
+  .srow .si{width:40px;height:40px;border-radius:11px;background:var(--paper-2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .srow .si svg{width:20px;height:20px}
+  .srow .st{flex:1}
+  .srow .st b{font-size:14.5px;font-weight:700;display:block}
+  .srow .st p{font-size:12px;color:var(--muted);margin-top:1px;line-height:1.35}
+  .srow button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;font-weight:600;font-size:13px;color:var(--ink)}
+
+  /* zone list */
+  .zcard{background:#fff;border:1px solid var(--line);border-radius:13px;padding:12px 13px;margin-bottom:9px;display:flex;align-items:center;gap:11px}
+  .zcard .zsw{width:16px;height:16px;border-radius:5px;flex-shrink:0}
+  .zcard .zn{flex:1}.zcard .zn b{font-family:'Bricolage Grotesque';font-weight:700;font-size:15px;display:block}
+  .zcard .zn span{font-size:11.5px;color:var(--muted)}
+  .zcard .ztog{border:1px solid var(--line);background:var(--paper);border-radius:9px;width:38px;height:34px;font-size:15px}
+  .zcard .zx{border:none;background:none;color:#bb3c12;font-size:18px;padding:4px 6px}
+
+  /* draw bar */
+  .drawbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--safe-b) + 84px);z-index:1350;display:none;gap:9px;background:var(--ink);padding:9px;border-radius:15px;box-shadow:var(--shadow)}
+  .drawbar.show{display:flex}
+  .drawbar button{border:none;border-radius:10px;padding:11px 16px;font-weight:700;font-size:14px}
+  .drawbar .dok{background:var(--client);color:#fff}
+  .drawbar .dno{background:rgba(255,255,255,.15);color:#fff}
+  .drawbar .dundo{background:rgba(255,255,255,.15);color:#fff}
+
+  /* popup */
+  .leaflet-popup-content-wrapper{border-radius:14px}
+  .leaflet-popup-content{margin:13px 15px;font-family:'Hanken Grotesk'}
+  .pop h3{font-family:'Bricolage Grotesque';font-weight:700;font-size:17px;margin-bottom:3px}
+  .pop .pa{font-size:12px;color:var(--muted);margin-bottom:7px}
+  .pop .pl{font-size:12.5px;margin:3px 0}.pop .pl b{color:var(--muted)}
+  .pop .pbtns{display:flex;gap:6px;margin-top:10px}
+  .pop .pbtns button,.pop .pbtns a{flex:1;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;text-align:center;text-decoration:none}
+  .pe{background:var(--ink);color:#fff}.pd{background:#f6dcd2;color:#bb3c12}.pg{background:var(--client);color:#fff}
+
+  /* Compteur déroulant (odomètre) */
+  .clicker{background:var(--ink);border-radius:18px;padding:20px 16px 18px;text-align:center;color:var(--paper);position:relative;overflow:hidden;user-select:none;-webkit-user-select:none}
+  .clicker .ctitle{font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;color:#9fb4ae}
+  .odo{display:flex;justify-content:center;gap:3px;margin:10px 0 4px}
+  .odo-col{height:74px;overflow:hidden;width:46px;background:rgba(255,255,255,.06);border-radius:10px}
+  .odo-strip{display:flex;flex-direction:column;transition:transform .42s cubic-bezier(.2,.9,.2,1)}
+  .odo-strip.nt{transition:none}
+  .odo-digit{height:74px;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque';font-weight:800;font-size:52px;line-height:1;color:#fff}
+  .tapbtn{margin-top:12px;width:100%;border:none;border-radius:14px;padding:20px;background:var(--accent);color:#fff;font-family:'Bricolage Grotesque';font-weight:800;font-size:21px;letter-spacing:.3px;box-shadow:0 8px 22px rgba(240,85,45,.4)}
+  .tapbtn:active{transform:scale(.97);background:var(--accent-2)}
+  .clicker-row{display:flex;gap:9px;margin-top:10px}
+  .clicker-row button{flex:1;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:var(--paper);border-radius:11px;padding:11px;font-weight:700;font-size:14px}
+  .clicker-row .save{background:var(--client);border-color:var(--client)}
+  .csession{font-size:12.5px;color:#9fb4ae;margin-top:9px}
+
+  /* Tournée */
+  .tour-opt{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .tstop{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+  .tstop .sn{width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-family:'Bricolage Grotesque';font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .tstop .si2{flex:1;min-width:0}.tstop .si2 b{font-size:14.5px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tstop .si2 span{font-size:12px;color:var(--muted)}
+  .routenum{background:transparent;border:none}
+  .rn-badge{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}
+  .rn-badge span{transform:rotate(45deg);color:#fff;font-weight:800;font-size:12px;font-family:'Bricolage Grotesque'}
+  .tourtotal{background:var(--paper-2);border-radius:12px;padding:13px;text-align:center;font-weight:600;font-size:14px;margin-bottom:12px}
+  .tourtotal b{font-family:'Bricolage Grotesque';font-weight:800;font-size:19px;color:var(--accent)}
+
+  /* À faire aujourd'hui */
+  .todobar{position:fixed;left:12px;right:12px;top:calc(var(--safe-t) + 64px);z-index:1150;background:var(--ink);color:var(--paper);border-radius:13px;padding:11px 14px;display:none;align-items:center;gap:10px;box-shadow:var(--shadow)}
+  .todobar.show{display:flex}
+  .todobar .tb-t{flex:1;font-size:13.5px;font-weight:600;line-height:1.25}
+  .todobar .tb-go{background:var(--accent);border:none;color:#fff;border-radius:9px;padding:8px 13px;font-weight:700;font-size:13px}
+  .todobar .tb-x{background:none;border:none;color:#9fb4ae;font-size:18px;padding:2px 6px}
+  /* Légende */
+  .legendbtn{position:fixed;left:12px;bottom:calc(var(--safe-b) + 78px);z-index:1150;background:var(--paper);border:none;border-radius:11px;box-shadow:var(--shadow);padding:10px 13px;font-weight:700;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:7px}
+  .legendbtn:active{transform:scale(.95)}
+  .legrow{display:flex;align-items:center;gap:11px;padding:8px 0;font-size:14px}
+  .legrow .lsw{width:16px;height:16px;border-radius:50%;flex-shrink:0}
+  .legrow .lsq{width:16px;height:16px;border-radius:5px;flex-shrink:0}
+  .legtoggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 0;border-top:1px solid var(--line);font-size:14px;font-weight:600;margin-top:8px}
+  .switch{width:48px;height:28px;border-radius:20px;background:var(--line);position:relative;transition:background .2s;flex-shrink:0;border:none}
+  .switch.on{background:var(--client)}
+  .switch i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .switch.on i{left:23px}
+  /* Rapport */
+  .rep-stat{display:flex;justify-content:space-between;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .rep-stat b{font-family:'Bricolage Grotesque';font-weight:700;font-size:17px}
+  .rep-h{font-family:'Bricolage Grotesque';font-weight:700;font-size:15px;margin:18px 0 2px}
+
+  .toast{position:fixed;bottom:calc(var(--safe-b) + 150px);left:50%;transform:translateX(-50%) translateY(30px);background:var(--ink);color:var(--paper);padding:13px 22px;border-radius:30px;font-size:14px;font-weight:600;z-index:5000;box-shadow:var(--shadow);opacity:0;transition:all .3s;pointer-events:none;max-width:90vw;text-align:center}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  #file{display:none}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="topbar">
+  <div class="brand"><span class="d"></span>Boîtage</div>
+  <input class="search" id="search" placeholder="Chercher une adresse…" enterkeyhint="search">
+  <button class="iconbtn" id="locateBtn" title="Ma position">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+  </button>
+</div>
+
+<div class="todobar" id="todobar">
+  <span class="tb-t" id="todoText"></span>
+  <button class="tb-go" id="todoGo">Voir</button>
+  <button class="tb-x" id="todoX">✕</button>
+</div>
+<button class="legendbtn" id="legendBtn">▤ Légende</button>
+
+<button class="fab" id="fab" title="Ajouter un lieu">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<div class="drawbar" id="drawbar">
+  <button class="dundo" id="drawUndo">↩ Annuler point</button>
+  <button class="dno" id="drawCancel">✕</button>
+  <button class="dok" id="drawDone">✓ Terminer</button>
+</div>
+
+<nav class="nav" id="nav">
+  <button data-tab="map" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>Carte</button>
+  <button data-tab="lieux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>Lieux</button>
+  <button data-tab="zones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 4.5-9 4.5-9-4.5L12 3Z"/><path d="m3 12 9 4.5L21 12M3 16.5 12 21l9-4.5"/></svg>Zones</button>
+  <button data-tab="objectif"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>Objectif</button>
+  <button data-tab="tournee"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="5" r="2.4"/><path d="M8.4 19H14a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.6"/></svg>Tournée</button>
+  <button data-tab="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>Plus</button>
+</nav>
+
+<div class="sheet-back" id="sheetBack"></div>
+<div class="sheet" id="sheet">
+  <div class="grip"></div>
+  <div class="sheet-head">
+    <div><h2 id="sheetTitle">Titre</h2><div class="sub" id="sheetSub"></div></div>
+    <button class="closex" id="sheetClose">✕</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="file" accept="application/json">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script>
+/* ===================== Storage (window.storage -> localStorage -> mémoire) ===================== */
+const mem = {};
+const Store = {
+  async get(k){
+    if(window.storage){ try{ const r=await window.storage.get(k); return r? r.value : null; }catch(e){} }
+    try{ return localStorage.getItem(k); }catch(e){ return mem[k] ?? null; }
+  },
+  async set(k,v){
+    if(window.storage){ try{ await window.storage.set(k,v); return; }catch(e){} }
+    try{ localStorage.setItem(k,v); }catch(e){ mem[k]=v; }
+  }
+};
+
+/* ===================== Constantes ===================== */
+const STATUSES = {
+  aboiter:{label:'À boiter',     hex:'#ee8a2e'},
+  boite:  {label:'Boité',        hex:'#3f7cb6'},
+  rdv:    {label:'RDV pris',     hex:'#8155d6'},
+  client: {label:'Client',       hex:'#2f9d57'},
+  perdu:  {label:'Pas intéressé',hex:'#9b9389'},
+};
+const ZSTATUS = {
+  todo:{label:'À faire', hex:'#ee8a2e'},
+  doing:{label:'En cours',hex:'#3f7cb6'},
+  done:{label:'Terminé', hex:'#2f9d57'},
+  repasser:{label:'À repasser', hex:'#8155d6'},
+};
+const PRIO={haute:'Haute',moyenne:'Moyenne',basse:'Basse'};
+const ICN={
+  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z"/></svg>',
+  nav:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 19-9-9 19-2-8-8-2Z"/></svg>',
+  link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 8l5-5 5 5M12 3v12"/></svg>',
+  sheet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>',
+};
+
+/* ===================== État ===================== */
+let prospects=[], zones=[], logs=[], objectifs={}, baseObjectif=2000;
+let map, markersLayer, zonesLayer, routeLayer, posMarker=null, posAccuracy=null, watchId=null, liveTracking=false;
+let markerRefs={};
+let mode='normal';            // normal | place | draw
+let draftLatLng=null, editingId=null;
+let activeFilter='all';
+let drawPts=[], drawTemp=null, drawVerts=[], drawPurpose='zone';
+let monthCursor=new Date(); monthCursor.setDate(1);
+let tour=null;                // {order:[ids], distance}
+let liveSession={count:0, logId:null}; let liveSaveT=null;
+let searchMarker=null, lastSearchQuery='';
+let heatLayer=null, heatOn=false, zoneFilter='all', todoDismissed=false;
+
+/* ===================== Carte ===================== */
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:true}).setView([-21.04,55.27],12.5); // Ouest Réunion (St-Paul/St-Gilles)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  zonesLayer=L.layerGroup().addTo(map);
+  routeLayer=L.layerGroup().addTo(map);
+  if(typeof L.markerClusterGroup==='function'){
+    markersLayer=L.markerClusterGroup({maxClusterRadius:55,spiderfyOnMaxZoom:true,showCoverageOnHover:false,
+      iconCreateFunction:c=>{
+        const n=c.getChildCount();
+        const size=n<10?38:n<50?46:54;
+        return L.divIcon({className:'',iconSize:[size,size],
+          html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:rgba(19,48,44,.92);color:#fff;border:3px solid #f0552d;display:flex;align-items:center;justify-content:center;font-family:Bricolage Grotesque;font-weight:800;font-size:${n<100?16:14}px;box-shadow:0 3px 10px rgba(0,0,0,.35)">${n}</div>`});
+      }
+    }).addTo(map);
+  } else {
+    markersLayer=L.layerGroup().addTo(map);
+  }
+  map.on('click',onMapClick);
+}
+function onMapClick(e){
+  if(mode==='place'){ draftLatLng=e.latlng; setMode('normal'); openProspectForm(); }
+  else if(mode==='draw'){ addDrawPoint(e.latlng); }
+}
+function pinIcon(status){
+  const s=STATUSES[status]||STATUSES.aboiter;
+  return L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15,30],popupAnchor:[0,-30],
+    html:`<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${s.hex};border:2.5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-weight:800;font-size:12px;font-family:Bricolage Grotesque">${s.label[0]}</span></div>`});
+}
+function renderMarkers(){
+  markersLayer.clearLayers(); markerRefs={};
+  prospects.forEach(p=>{
+    if(activeFilter!=='all'){
+      if(activeFilter==='repasser'){ if(!isDue(p.dateRepasser)) return; }
+      else if(p.status!==activeFilter) return;
+    }
+    const m=L.marker([p.lat,p.lng],{icon:pinIcon(p.status)}).addTo(markersLayer).bindPopup(popupHtml(p));
+    markerRefs[p.id]=m;
+  });
+  refreshHeat();
+}
+function buildHeatPoints(){
+  return prospects.filter(p=>p.status==='rdv'||p.status==='client').map(p=>[p.lat,p.lng,p.status==='client'?1:0.55]);
+}
+function refreshHeat(){
+  if(!heatOn) return;
+  if(typeof L.heatLayer!=='function') return;
+  if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; }
+  const pts=buildHeatPoints();
+  if(pts.length) heatLayer=L.heatLayer(pts,{radius:38,blur:28,maxZoom:17,minOpacity:.35,gradient:{0.3:'#3f7cb6',0.6:'#ee8a2e',1:'#f0552d'}}).addTo(map);
+}
+function toggleHeat(){
+  if(typeof L.heatLayer!=='function'){ toast('Carte de chaleur indisponible'); return; }
+  if(heatOn){ if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;} heatOn=false; return; }
+  if(!buildHeatPoints().length){ toast('Aucun RDV/client à afficher pour l\'instant'); return; }
+  heatOn=true; refreshHeat();
+}
+function renderZones(){
+  zonesLayer.clearLayers();
+  zones.forEach(z=>{
+    if(z.hidden) return;
+    if(zoneFilter!=='all' && z.status!==zoneFilter) return;
+    const col=(ZSTATUS[z.status]||ZSTATUS.todo).hex;
+    const style={color:col,weight:2.5,fillColor:col,fillOpacity:.22};
+    let layer;
+    if(z.type==='cp' && z.geojson){ layer=L.geoJSON(z.geojson,{style}); }
+    else if(z.type==='circle'){ layer=L.circle([z.lat,z.lng],{radius:z.radius||700,...style}); }
+    else { layer=L.polygon(z.coords,style); }
+    layer.bindPopup(`<div class="pop"><h3>${esc(z.name)}</h3><span class="badge" style="background:${col}">${(ZSTATUS[z.status]||ZSTATUS.todo).label}</span>${z.datePrevu?`<div class="pl"><b>Prévu le :</b> ${fdate(z.datePrevu)}</div>`:''}${z.dateFait?`<div class="pl"><b>Boîté le :</b> ${fdate(z.dateFait)}</div>`:''}${z.dateRepasser?`<div class="pl"><b>À repasser :</b> ${fdate(z.dateRepasser)}</div>`:''}${z.dateRepasse?`<div class="pl"><b>Repassé le :</b> ${fdate(z.dateRepasse)}</div>`:''}<div class="pbtns"><button class="pe" onclick="editZone('${z.id}')">Modifier</button><button class="pd" onclick="delZone('${z.id}')">Supprimer</button></div></div>`);
+    layer.addTo(zonesLayer);
+  });
+}
+function popupHtml(p){
+  const s=STATUSES[p.status]||STATUSES.aboiter;
+  let h=`<div class="pop"><h3>${esc(p.name)}</h3>`;
+  const full=[p.addr,[p.cp,p.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  if(full) h+=`<div class="pa">${esc(full)}</div>`;
+  h+=`<span class="badge" style="background:${s.hex}">${s.label}</span>`;
+  if(p.url) h+=`<div class="pl"><b>Annonce :</b> <a href="${esc(normUrl(p.url))}" target="_blank" rel="noopener">ouvrir le lien</a></div>`;
+  if(p.dateBoiter) h+=`<div class="pl"><b>À boiter :</b> ${fdate(p.dateBoiter)}</div>`;
+  if(p.dateBoite) h+=`<div class="pl"><b>Boité le :</b> ${fdate(p.dateBoite)}</div>`;
+  if(p.dateRepasser) h+=`<div class="pl"><b>Repasser :</b> ${fdate(p.dateRepasser)}</div>`;
+  if(p.notes) h+=`<div class="pl"><b>Notes :</b> ${esc(p.notes)}</div>`;
+  h+=`<div class="pbtns">`;
+  h+=`<a class="pg" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener">Y aller</a>`;
+  if(p.url) h+=`<a class="pe" href="${esc(normUrl(p.url))}" target="_blank" rel="noopener">Annonce</a>`;
+  h+=`<button class="pd" onclick="editProspect('${p.id}')">Modifier</button>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+/* ===================== Modes ===================== */
+function setMode(m){
+  mode=m;
+  const fab=document.getElementById('fab');
+  document.getElementById('drawbar').classList.toggle('show',m==='draw');
+  map.getContainer().style.cursor = (m==='normal')?'':'crosshair';
+  fab.classList.toggle('armed', m==='place');
+  if(m!=='draw') clearDraftDraw();
+}
+
+/* ===================== Dessin de zone ===================== */
+function startDraw(purpose){ drawPurpose=purpose||'zone'; closeSheet(); drawPts=[]; drawVerts=[]; clearDraftDraw(); setMode('draw'); toast(drawPurpose==='select'?'Entoure les maisons déjà faites':'Touchez la carte pour tracer la zone'); }
+function addDrawPoint(latlng){
+  drawPts.push(latlng);
+  const c=L.circleMarker(latlng,{radius:5,color:'#13302c',fillColor:'#f0552d',fillOpacity:1,weight:2}).addTo(map);
+  drawVerts.push(c);
+  if(drawTemp) map.removeLayer(drawTemp);
+  drawTemp=L.polyline(drawPts,{color:'#f0552d',weight:3,dashArray:'6 5'}).addTo(map);
+}
+function clearDraftDraw(){
+  if(drawTemp){ map.removeLayer(drawTemp); drawTemp=null; }
+  drawVerts.forEach(v=>map.removeLayer(v)); drawVerts=[];
+  drawPts=[];
+}
+function finishDraw(){
+  if(drawPts.length<3){ toast('Il faut au moins 3 points'); return; }
+  const coords=drawPts.map(p=>[p.lat,p.lng]);
+  setMode('normal');
+  if(drawPurpose==='select'){ openApplySheet(prospects.filter(p=>inPolyLatLng(p.lat,p.lng,coords)), 'dans la sélection'); }
+  else openZoneForm(null, coords);
+}
+
+/* ===================== Géocodage ===================== */
+async function geocodeAddress(){
+  const a=[gv('f-addr'),gv('f-cp'),gv('f-ville')].filter(Boolean).join(' ');
+  if(!a){ toast('Saisis une adresse d\'abord'); return; }
+  const hint=document.getElementById('geoHint'); hint.textContent='Recherche…';
+  let res=await geocodeBest(a);
+  if(!res){ const noNum=a.replace(/^\s*\d+\s*/,''); if(noNum!==a) res=await geocodeBest(noNum); }
+  if(res){ draftLatLng={lat:res.lat,lng:res.lng}; hint.textContent='✓ Localisé : '+(res.label||'').slice(0,55); map.setView([res.lat,res.lng],16); }
+  else hint.textContent='Introuvable. Ferme et touche la carte pour placer le repère.';
+}
+async function addZoneByCP(){
+  const cp=gv('z-cp').trim();
+  if(!cp){ toast('Saisis un code postal'); return; }
+  const hint=document.getElementById('zHint'); hint.textContent='Recherche de la zone…';
+  try{
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&polygon_geojson=1&limit=1&countrycodes=re&q='+encodeURIComponent(cp+' La Réunion'),{headers:{'Accept-Language':'fr'}});
+    const j=await r.json();
+    if(!j||!j.length){ hint.textContent='Zone introuvable pour ce code postal.'; return; }
+    const res=j[0];
+    const z={id:uid('z'),name:gv('z-name').trim()||('CP '+cp),status:gv('z-status'),hidden:false};
+    if(res.geojson && (res.geojson.type==='Polygon'||res.geojson.type==='MultiPolygon')){ z.type='cp'; z.geojson=res.geojson; }
+    else { z.type='circle'; z.lat=+res.lat; z.lng=+res.lon; z.radius=900; }
+    zones.push(z); await saveZones(); renderZones(); closeSheet();
+    const b = z.type==='cp' ? L.geoJSON(z.geojson).getBounds() : L.circle([z.lat,z.lng],{radius:z.radius}).getBounds();
+    map.fitBounds(b.pad(.2)); toast('Zone ajoutée');
+  }catch(e){ hint.textContent='Recherche impossible (réseau). Réessaie ou trace la zone à la main.'; }
+}
+
+/* ===================== Persistance ===================== */
+async function saveProspects(){ await Store.set('boitage_prospects', JSON.stringify(prospects)); }
+async function saveZones(){ await Store.set('boitage_zones', JSON.stringify(zones)); }
+async function saveLogs(){ await Store.set('boitage_logs', JSON.stringify(logs)); }
+async function saveObj(){ await Store.set('boitage_objectif', String(baseObjectif)); await Store.set('boitage_objectifs', JSON.stringify(objectifs)); }
+function effObjectif(mk){
+  if(objectifs[mk]!=null) return objectifs[mk];
+  const ks=Object.keys(objectifs).filter(k=>k<mk).sort();
+  if(ks.length) return objectifs[ks[ks.length-1]];
+  return baseObjectif;
+}
+
+/* ===================== Onglets / Sheets ===================== */
+const nav=document.getElementById('nav');
+nav.querySelectorAll('button').forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
+function openTab(t){
+  nav.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  if(t==='map'){ closeSheet(); return; }
+  if(t==='lieux') renderLieux();
+  if(t==='zones') renderZonesPanel();
+  if(t==='objectif') renderObjectif();
+  if(t==='tournee') renderTournee();
+  if(t==='plus') renderPlus();
+  openSheet();
+}
+function openSheet(){ document.getElementById('sheet').classList.add('show'); document.getElementById('sheetBack').classList.add('show'); }
+function closeSheet(){
+  document.getElementById('sheet').classList.remove('show'); document.getElementById('sheetBack').classList.remove('show');
+  nav.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.tab==='map'));
+}
+document.getElementById('sheetClose').onclick=closeSheet;
+document.getElementById('sheetBack').onclick=closeSheet;
+
+function setSheet(title,sub,body){
+  document.getElementById('sheetTitle').textContent=title;
+  document.getElementById('sheetSub').textContent=sub||'';
+  document.getElementById('sheetBody').innerHTML=body;
+}
+
+/* ===================== Panneau LIEUX ===================== */
+function renderLieux(){
+  const counts={all:prospects.length, repasser:prospects.filter(p=>isDue(p.dateRepasser)).length};
+  Object.keys(STATUSES).forEach(k=>counts[k]=prospects.filter(p=>p.status===k).length);
+  const chips=[['all','Tous',null],['repasser','À repasser','#bb3c12'],...Object.entries(STATUSES).map(([k,v])=>[k,v.label,v.hex])];
+  let html=`<div class="filters">`+chips.map(([k,l,c])=>`<button class="chip ${activeFilter===k?'on':''}" data-f="${k}">${c?`<span class="sw" style="background:${c}"></span>`:''}${l} <span class="ct">${counts[k]||0}</span></button>`).join('')+`</div><div id="lieuxList"></div>`;
+  setSheet('Mes lieux', prospects.length+' lieu(x) enregistré(s)', html);
+  document.querySelectorAll('#sheetBody .chip').forEach(c=>c.onclick=()=>{activeFilter=c.dataset.f;renderLieux();renderMarkers();});
+  drawLieuxList();
+}
+function drawLieuxList(){
+  const q=gv('search').toLowerCase().trim();
+  let items=prospects.filter(p=>{
+    if(activeFilter==='repasser') return isDue(p.dateRepasser);
+    return activeFilter==='all'||p.status===activeFilter;
+  });
+  if(q) items=items.filter(p=>(p.name+' '+p.addr+' '+p.cp+' '+p.ville+' '+p.notes).toLowerCase().includes(q));
+  const ord={haute:0,moyenne:1,basse:2};
+  items.sort((a,b)=>(ord[a.prio]-ord[b.prio])||a.name.localeCompare(b.name));
+  const el=document.getElementById('lieuxList'); if(!el) return;
+  if(!items.length){ el.innerHTML=`<div class="empty"><span class="big">⌖</span>${prospects.length?'Aucun lieu pour ce filtre.':'Aucun lieu.<br>Touche le bouton + pour en ajouter un.'}</div>`; return; }
+  el.innerHTML=items.map(p=>{
+    const s=STATUSES[p.status]||STATUSES.aboiter;
+    const full=[p.addr,[p.cp,p.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    let dts='';
+    if(p.dateBoiter)dts+=`<span class="dt">📅 ${fdate(p.dateBoiter)}</span>`;
+    if(p.dateBoite)dts+=`<span class="dt">✅ ${fdate(p.dateBoite)}</span>`;
+    if(p.dateRepasser)dts+=`<span class="dt ${isDue(p.dateRepasser)?'warn':''}">🔁 ${fdate(p.dateRepasser)}</span>`;
+    return `<div class="card" data-id="${p.id}" style="--cc:${s.hex}">
+      <div class="top"><div class="nm">${esc(p.name)}</div><div class="prio ${p.prio}">${PRIO[p.prio]}</div></div>
+      ${full?`<div class="ad">${esc(full)}</div>`:''}
+      <span class="badge" style="background:${s.hex}">${s.label}</span>
+      ${dts?`<div class="dates">${dts}</div>`:''}
+      <div class="acts">
+        <a class="act" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank">${ICN.nav} Y aller</a>
+        ${p.url?`<a class="act" href="${esc(normUrl(p.url))}" target="_blank" rel="noopener">${ICN.link} Annonce</a>`:''}
+        <button class="act edit" data-edit="${p.id}">${ICN.edit} Modifier</button>
+      </div></div>`;
+  }).join('');
+  el.querySelectorAll('.card').forEach(c=>c.addEventListener('click',e=>{ if(e.target.closest('a,button'))return; focusProspect(c.dataset.id); }));
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=e=>{e.stopPropagation();editProspect(b.dataset.edit);});
+}
+function focusProspect(id){
+  const p=prospects.find(x=>x.id===id); if(!p)return;
+  closeSheet(); map.flyTo([p.lat,p.lng],16,{duration:.7});
+  setTimeout(()=>{ if(markerRefs[id]) markerRefs[id].openPopup(); },750);
+}
+
+/* ===================== Formulaire LIEU ===================== */
+function statusGridHtml(sel){
+  return `<div class="sgrid">`+Object.entries(STATUSES).map(([k,v])=>`<div class="sopt ${sel===k?'sel':''}" data-s="${k}"><span class="sw" style="background:${v.hex}"></span>${v.label}</div>`).join('')+`</div>`;
+}
+function openProspectForm(){ openProspectFormWith(null); }
+function openProspectFormWith(p){
+  editingId=p?p.id:null;
+  if(p) draftLatLng={lat:p.lat,lng:p.lng};
+  const v=f=>p?(p[f]||''):'';
+  const body=`
+    <div class="field"><label>Nom *</label><input id="f-name" value="${esc(v('name'))}" placeholder="Ex. Résidence Les Filaos"></div>
+    <div class="field"><label>Adresse</label><div class="addr-line"><input id="f-addr" style="flex:1" value="${esc(v('addr'))}" placeholder="N° et rue"><button class="geob" id="geoBtn">Localiser</button></div><div class="hint" id="geoHint">${(p||draftLatLng)?'Position enregistrée. « Localiser » la recalcule depuis l\'adresse.':'Touche la carte pour poser le repère, ou « Localiser » depuis l\'adresse.'}</div></div>
+    <div class="row2"><div class="field"><label>Code postal</label><input id="f-cp" inputmode="numeric" value="${esc(v('cp'))}" placeholder="97460"></div><div class="field"><label>Ville</label><input id="f-ville" value="${esc(v('ville'))}" placeholder="Saint-Paul"></div></div>
+    <div class="field"><label>Lien de l'annonce</label><input id="f-url" inputmode="url" value="${esc(v('url'))}" placeholder="https://..."></div>
+    <div class="row2"><div class="field"><label>À boiter le</label><input id="f-d1" type="date" value="${esc(v('dateBoiter'))}"></div><div class="field"><label>Boité le</label><input id="f-d2" type="date" value="${esc(v('dateBoite'))}"></div></div>
+    <div class="field"><label>Repasser le</label><input id="f-d3" type="date" value="${esc(v('dateRepasser'))}"></div>
+    <div class="field"><label>Statut</label>${statusGridHtml(p?p.status:'aboiter')}</div>
+    <div class="field"><label>Priorité</label><select id="f-prio"><option value="haute"${v('prio')==='haute'?' selected':''}>Haute</option><option value="moyenne"${(!p||v('prio')==='moyenne')?' selected':''}>Moyenne</option><option value="basse"${v('prio')==='basse'?' selected':''}>Basse</option></select></div>
+    <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Nb de boîtes, digicode, remarques…">${esc(v('notes'))}</textarea></div>
+    <div class="formfoot">${p?`<button class="btn btn-d" id="delBtn">Supprimer</button>`:`<button class="btn btn-g" id="cancelBtn">Annuler</button>`}<button class="btn btn-p" id="saveBtn">Enregistrer</button></div>`;
+  setSheet(p?'Modifier le lieu':'Nouveau lieu', p?'':(draftLatLng?'Repère posé. Complète les infos.':'Renseigne les infos.'), body);
+  openSheet();
+  document.querySelectorAll('#sheetBody .sopt').forEach(o=>o.onclick=()=>{document.querySelectorAll('#sheetBody .sopt').forEach(x=>x.classList.remove('sel'));o.classList.add('sel');});
+  document.getElementById('geoBtn').onclick=geocodeAddress;
+  document.getElementById('saveBtn').onclick=saveProspect;
+  if(p) document.getElementById('delBtn').onclick=()=>delProspect(p.id);
+  else document.getElementById('cancelBtn').onclick=()=>{draftLatLng=null;closeSheet();};
+}
+async function saveProspect(){
+  const name=gv('f-name').trim();
+  if(!name){ toast('Le nom est requis'); return; }
+  if(!draftLatLng){ toast('Place le repère (Localiser, ou touche la carte)'); return; }
+  const sel=document.querySelector('#sheetBody .sopt.sel');
+  const data={name,addr:gv('f-addr').trim(),cp:gv('f-cp').trim(),ville:gv('f-ville').trim(),url:normUrl(gv('f-url')),dateBoiter:gv('f-d1'),dateBoite:gv('f-d2'),dateRepasser:gv('f-d3'),status:sel?sel.dataset.s:'aboiter',prio:gv('f-prio'),notes:gv('f-notes').trim(),lat:draftLatLng.lat,lng:draftLatLng.lng};
+  if(editingId){ const i=prospects.findIndex(x=>x.id===editingId); prospects[i]={...prospects[i],...data}; toast('Mis à jour'); }
+  else { data.id=uid('p'); prospects.push(data); toast('Lieu ajouté'); }
+  await saveProspects(); editingId=null; draftLatLng=null; renderMarkers(); closeSheet();
+}
+window.editProspect=id=>{const p=prospects.find(x=>x.id===id);if(p)openProspectFormWith(p);};
+window.delProspect=async id=>{const p=prospects.find(x=>x.id===id);if(!p)return;if(!confirm(`Supprimer « ${p.name} » ?`))return;prospects=prospects.filter(x=>x.id!==id);await saveProspects();renderMarkers();closeSheet();toast('Supprimé');};
+
+/* ===================== Panneau ZONES ===================== */
+function renderZonesPanel(){
+  const shown = zones.filter(z=>zoneFilter==='all'||z.status===zoneFilter);
+  let list = shown.length? shown.map(z=>{
+    const s=ZSTATUS[z.status]||ZSTATUS.todo;
+    return `<div class="zcard"><span class="zsw" style="background:${s.hex}"></span><div class="zn"><b>${esc(z.name)}</b><span>${s.label}${z.type==='cp'?' · code postal':z.type==='circle'?' · approx.':' · tracée'}</span>${zdates(z)}</div><button class="ztog" data-apply="${z.id}" title="Marquer les lieux de la zone">✓</button><button class="ztog" data-tog="${z.id}" title="Afficher/Masquer">${z.hidden?'🚫':'👁'}</button><button class="zx" data-zdel="${z.id}">✕</button></div>`;
+  }).join('') : `<div class="empty"><span class="big">◇</span>${zones.length?'Aucune zone pour ce filtre.':'Aucune zone.<br>Ajoute un secteur à boiter ci-dessous.'}</div>`;
+  const zcounts={all:zones.length}; Object.keys(ZSTATUS).forEach(k=>zcounts[k]=zones.filter(z=>z.status===k).length);
+  const zchips=[['all','Toutes',null],...Object.entries(ZSTATUS).map(([k,v])=>[k,v.label,v.hex])];
+  const filters=`<div class="filters">`+zchips.map(([k,l,c])=>`<button class="chip ${zoneFilter===k?'on':''}" data-zf="${k}">${c?`<span class="sw" style="background:${c}"></span>`:''}${l} <span class="ct">${zcounts[k]||0}</span></button>`).join('')+`</div>`;
+  const body=`
+    <div class="field"><label>Nom de la zone</label><input id="z-name" placeholder="Ex. L'Hermitage centre"></div>
+    <div class="field"><label>Statut</label><select id="z-status"><option value="todo">À faire</option><option value="doing">En cours</option><option value="done">Terminé</option><option value="repasser">À repasser</option></select></div>
+    <button class="btn btn-p btn-w" id="drawZoneBtn" style="margin-bottom:10px">✏️ Tracer la zone sur la carte</button>
+    <button class="btn btn-g btn-w" id="selectBtn" style="margin-bottom:10px">✓ Marquer des lieux déjà faits (sélection)</button>
+    <div class="field"><label>… ou par code postal</label><div class="addr-line"><input id="z-cp" style="flex:1" inputmode="numeric" placeholder="97434"><button class="geob" id="cpBtn">Ajouter</button></div><div class="hint" id="zHint">Le contour du secteur s'affichera en couleur sur la carte.</div></div>
+    <div class="secttl">Mes zones <span>${shown.length}/${zones.length}</span></div>
+    ${filters}
+    <div id="zoneList">${list}</div>`;
+  setSheet('Zones à boiter','Sélectionne tes secteurs',body);
+  openSheet();
+  document.querySelectorAll('#sheetBody .chip[data-zf]').forEach(c=>c.onclick=()=>{zoneFilter=c.dataset.zf;renderZones();renderZonesPanel();});
+  document.getElementById('drawZoneBtn').onclick=()=>{ pendingZoneMeta={name:gv('z-name').trim(),status:gv('z-status')}; startDraw('zone'); };
+  document.getElementById('selectBtn').onclick=()=>startDraw('select');
+  document.getElementById('cpBtn').onclick=addZoneByCP;
+  document.querySelectorAll('[data-tog]').forEach(b=>b.onclick=async()=>{const z=zones.find(x=>x.id===b.dataset.tog);z.hidden=!z.hidden;await saveZones();renderZones();renderZonesPanel();});
+  document.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>{const z=zones.find(x=>x.id===b.dataset.apply);openApplySheet(prospectsInZone(z),'dans « '+z.name+' »');});
+  document.querySelectorAll('[data-zdel]').forEach(b=>b.onclick=()=>delZone(b.dataset.zdel));
+}
+let pendingZoneMeta=null;
+function openZoneForm(existing, coords){
+  const z=existing||{name:pendingZoneMeta?.name||'',status:pendingZoneMeta?.status||'todo'};
+  const dv=f=>(z[f]||'');
+  const body=`
+    <div class="field"><label>Nom de la zone</label><input id="zf-name" value="${esc(z.name)}" placeholder="Ex. Quartier Plateau Caillou"></div>
+    <div class="field"><label>Statut</label><select id="zf-status"><option value="todo"${z.status==='todo'?' selected':''}>À faire</option><option value="doing"${z.status==='doing'?' selected':''}>En cours</option><option value="done"${z.status==='done'?' selected':''}>Terminé</option><option value="repasser"${z.status==='repasser'?' selected':''}>À repasser</option></select></div>
+    <div class="row2"><div class="field"><label>Prévu le</label><input id="zf-prevu" type="date" value="${esc(dv('datePrevu'))}"></div><div class="field"><label>Boîté le</label><input id="zf-fait" type="date" value="${esc(dv('dateFait'))}"></div></div>
+    <div class="row2"><div class="field"><label>À repasser le</label><input id="zf-rep" type="date" value="${esc(dv('dateRepasser'))}"></div><div class="field"><label>Repassé le</label><input id="zf-repe" type="date" value="${esc(dv('dateRepasse'))}"></div></div>
+    <div class="formfoot"><button class="btn btn-g" id="zfCancel">Annuler</button><button class="btn btn-p" id="zfSave">Enregistrer la zone</button></div>`;
+  setSheet(existing?'Modifier la zone':'Nouvelle zone', existing?'':'Donne un nom, un statut et des dates.', body); openSheet();
+  document.getElementById('zfCancel').onclick=()=>{closeSheet();renderZones();};
+  document.getElementById('zfSave').onclick=async()=>{
+    const name=gv('zf-name').trim()||'Zone';
+    const status=gv('zf-status');
+    const dateFait=gv('zf-fait'), dateRepasser=gv('zf-rep'), dateRepasse=gv('zf-repe'), datePrevu=gv('zf-prevu');
+    if(existing){ const i=zones.findIndex(x=>x.id===existing.id); zones[i]={...existing,name,status,datePrevu,dateFait,dateRepasser,dateRepasse}; }
+    else { zones.push({id:uid('z'),name,status,type:'poly',coords,hidden:false,datePrevu,dateFait,dateRepasser,dateRepasse}); }
+    pendingZoneMeta=null; await saveZones(); renderZones(); toast('Zone enregistrée'); closeSheet();
+  };
+}
+window.editZone=id=>{const z=zones.find(x=>x.id===id);if(z)openZoneForm(z,z.coords);};
+window.delZone=async id=>{const z=zones.find(x=>x.id===id);if(!z)return;if(!confirm(`Supprimer la zone « ${z.name} » ?`))return;zones=zones.filter(x=>x.id!==id);await saveZones();renderZones();closeSheet();toast('Zone supprimée');};
+
+/* --- Sélection de lieux par zone (mise à jour en bloc) --- */
+function inPolyLatLng(lat,lng,coords){
+  let inside=false;
+  for(let i=0,j=coords.length-1;i<coords.length;j=i++){
+    const yi=coords[i][0],xi=coords[i][1],yj=coords[j][0],xj=coords[j][1];
+    if(((yi>lat)!=(yj>lat)) && (lng < (xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function inRingLngLat(lat,lng,ring){
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>lat)!=(yj>lat)) && (lng < (xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function inGeoJSON(lat,lng,g){
+  if(!g)return false;
+  if(g.type==='Polygon') return inRingLngLat(lat,lng,g.coordinates[0]);
+  if(g.type==='MultiPolygon') return g.coordinates.some(poly=>inRingLngLat(lat,lng,poly[0]));
+  return false;
+}
+function prospectsInZone(z){
+  if(!z)return[];
+  if(z.type==='cp') return prospects.filter(p=>inGeoJSON(p.lat,p.lng,z.geojson));
+  if(z.type==='circle') return prospects.filter(p=>haversine({lat:z.lat,lng:z.lng},{lat:p.lat,lng:p.lng})<=(z.radius||900));
+  return prospects.filter(p=>inPolyLatLng(p.lat,p.lng,z.coords||[]));
+}
+function openApplySheet(matched, label){
+  if(!matched || !matched.length){ toast('Aucun lieu dans cette sélection'); openTab('zones'); return; }
+  const body=`
+    <div class="hint" style="margin-bottom:12px"><b>${matched.length}</b> lieu(x) ${label||'dans la sélection'}. Choisis le statut à leur appliquer.</div>
+    <div class="field"><label>Nouveau statut</label>${statusGridHtml('boite')}</div>
+    <label style="display:flex;gap:10px;align-items:center;font-size:14px;margin:4px 0 14px"><input type="checkbox" id="ap-date" checked style="width:20px;height:20px"> Renseigner la date de boîtage (aujourd'hui)</label>
+    <div style="max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:11px;padding:4px 12px;margin-bottom:8px">${matched.map(p=>`<div style="font-size:13.5px;padding:8px 0;border-bottom:1px solid var(--line)">${esc(p.name)}</div>`).join('')}</div>
+    <div class="formfoot"><button class="btn btn-g" id="apCancel">Annuler</button><button class="btn btn-p" id="apOk">Appliquer à ${matched.length} lieu(x)</button></div>`;
+  setSheet('Marquer les lieux','Mise à jour groupée',body); openSheet();
+  document.querySelectorAll('#sheetBody .sopt').forEach(o=>o.onclick=()=>{document.querySelectorAll('#sheetBody .sopt').forEach(x=>x.classList.remove('sel'));o.classList.add('sel');});
+  document.getElementById('apCancel').onclick=()=>openTab('zones');
+  document.getElementById('apOk').onclick=async()=>{
+    const sel=document.querySelector('#sheetBody .sopt.sel'); const status=sel?sel.dataset.s:'boite';
+    const setDate=document.getElementById('ap-date').checked; const today=toISO(new Date());
+    const ids=new Set(matched.map(m=>m.id));
+    prospects.forEach(p=>{ if(ids.has(p.id)){ p.status=status; if(setDate && !p.dateBoite) p.dateBoite=today; } });
+    await saveProspects(); renderMarkers();
+    toast(matched.length+' lieu(x) mis à jour'); closeSheet();
+  };
+}
+
+document.getElementById('drawUndo').onclick=()=>{ if(drawPts.length){drawPts.pop();const v=drawVerts.pop();if(v)map.removeLayer(v);if(drawTemp)map.removeLayer(drawTemp);if(drawPts.length){drawTemp=L.polyline(drawPts,{color:'#f0552d',weight:3,dashArray:'6 5'}).addTo(map);}else drawTemp=null;} };
+document.getElementById('drawCancel').onclick=()=>{ setMode('normal'); pendingZoneMeta=null; };
+document.getElementById('drawDone').onclick=finishDraw;
+
+/* ===================== Panneau OBJECTIF ===================== */
+function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthLabel(d){ return d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'}); }
+function renderObjectif(){
+  const mk=monthKey(monthCursor);
+  const monthLogs=logs.filter(l=>l.date.slice(0,7)===mk).sort((a,b)=>b.date.localeCompare(a.date));
+  const loggedTotal=monthLogs.reduce((s,l)=>s+l.count,0);
+  const isCurrent = monthKey(monthCursor)===monthKey(new Date());
+  // la session live n'est comptée que si on regarde le mois courant
+  const live = isCurrent ? liveSession.count : 0;
+  // si la session a déjà un log enregistré ce mois, ne pas le compter deux fois
+  const liveExtra = (isCurrent && liveSession.logId && monthLogs.some(l=>l.id===liveSession.logId)) ? 0 : live;
+  const total=loggedTotal+liveExtra;
+  const objectif=effObjectif(mk);
+  const pct=objectif>0?Math.min(100,Math.round(total/objectif*100)):0;
+  const allTime=logs.reduce((s,l)=>s+l.count,0)+ (liveSession.logId?0:liveSession.count);
+  const hist=monthLogs.map(l=>`<div class="logitem"><div><div class="lc">+${l.count} boîtes</div><div class="ld">${fdate(l.date)}${l.note?' · '+esc(l.note):''}</div></div><button class="lx" data-logdel="${l.id}">✕</button></div>`).join('');
+  const body=`
+    ${isCurrent?`<div class="clicker">
+      <div class="ctitle">Comptage en cours · tape à chaque boîte</div>
+      <div class="odo" id="odo"></div>
+      <button class="tapbtn" id="tapBtn">＋1 boîte</button>
+      <div class="clicker-row">
+        <button id="tapMinus">− 1</button>
+        <button id="tapTen">+ 10</button>
+        <button class="save" id="tapSave">Terminer la session</button>
+      </div>
+      <div class="csession" id="csession"></div>
+    </div>`:''}
+    <div class="objcard" style="margin-top:${isCurrent?'14px':'0'}">
+      <div class="mlabel"><button class="marrow" id="mPrev">‹</button><span style="min-width:120px">${monthLabel(monthCursor)}</span><button class="marrow" id="mNext"${isCurrent?' disabled style="opacity:.3"':''}>›</button></div>
+      <div class="bignum">${total.toLocaleString('fr-FR')} <small>/ ${objectif.toLocaleString('fr-FR')}</small></div>
+      <div class="pct">${pct}% de l'objectif · ${Math.max(0,objectif-total).toLocaleString('fr-FR')} restantes</div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="objedit"><input id="objInput" inputmode="numeric" value="${objectif}" placeholder="Objectif de ce mois"><button id="objSave">Définir</button></div>
+    </div>
+    <div class="quick">
+      <button data-add="25">+25</button><button data-add="50">+50</button><button data-add="100">+100</button><button data-add="250">+250</button>
+    </div>
+    <div class="addlog"><input id="logCount" inputmode="numeric" placeholder="Saisie manuelle"><button id="logAdd">Ajouter</button></div>
+    <div class="hint">${!isCurrent?'(Ajout sur le mois affiché) ':''}Le comptage et les saisies alimentent directement ta progression.</div>
+    <button class="btn btn-g btn-w" id="repBtn" style="margin:12px 0 4px">📄 Rapport du mois</button>
+    <div class="secttl">Historique du mois <span>Cumul total : ${allTime.toLocaleString('fr-FR')}</span></div>
+    <div>${hist||'<div class="empty" style="padding:24px">Rien pour ce mois.</div>'}</div>`;
+  setSheet('Objectif du mois','Ton avancement de boîtage',body); openSheet();
+  if(isCurrent){
+    renderOdo(liveSession.count, true);
+    document.getElementById('tapBtn').onclick=()=>tapCount(1);
+    document.getElementById('tapTen').onclick=()=>tapCount(10);
+    document.getElementById('tapMinus').onclick=()=>tapCount(-1);
+    document.getElementById('tapSave').onclick=finishSession;
+    updateCsession();
+  }
+  document.getElementById('mPrev').onclick=()=>{monthCursor.setMonth(monthCursor.getMonth()-1);renderObjectif();};
+  document.getElementById('mNext').onclick=()=>{ if(isCurrent)return; monthCursor.setMonth(monthCursor.getMonth()+1);renderObjectif();};
+  document.getElementById('objSave').onclick=async()=>{const n=parseInt(gv('objInput'),10);if(!isNaN(n)&&n>=0){objectifs[mk]=n;await saveObj();renderObjectif();toast('Objectif de '+monthLabel(monthCursor)+' mis à jour');}};
+  document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>addLog(parseInt(b.dataset.add,10)));
+  document.getElementById('logAdd').onclick=()=>{const n=parseInt(gv('logCount'),10);if(!isNaN(n)&&n>0)addLog(n);else toast('Saisis un nombre');};
+  document.querySelectorAll('[data-logdel]').forEach(b=>b.onclick=()=>delLog(b.dataset.logdel));
+  const rb=document.getElementById('repBtn'); if(rb) rb.onclick=()=>openReport(monthCursor);
+}
+
+/* --- Compteur déroulant (odomètre) --- */
+function renderOdo(n, instant){
+  const el=document.getElementById('odo'); if(!el)return;
+  const str=String(Math.max(0,n));
+  const digits=str.split('');
+  // (re)construire si le nombre de colonnes change
+  if(el.children.length!==digits.length){
+    el.innerHTML=digits.map(()=>`<div class="odo-col"><div class="odo-strip nt">${Array.from({length:10},(_,i)=>`<div class="odo-digit">${i}</div>`).join('')}</div></div>`).join('');
+  }
+  [...el.children].forEach((col,i)=>{
+    const strip=col.firstElementChild;
+    const d=parseInt(digits[i],10);
+    if(instant) strip.classList.add('nt'); else strip.classList.remove('nt');
+    strip.style.transform=`translateY(-${d*74}px)`;
+    if(instant){ void strip.offsetHeight; strip.classList.remove('nt'); }
+  });
+}
+function tapCount(delta){
+  liveSession.count=Math.max(0,liveSession.count+delta);
+  renderOdo(liveSession.count,false);
+  updateCsession();
+  // mettre à jour la progression du mois en direct
+  updateMonthTotalLive();
+  if(navigator.vibrate && delta>0) navigator.vibrate(8);
+  scheduleLiveSave();
+}
+function updateCsession(){
+  const el=document.getElementById('csession'); if(el) el.textContent='Session : '+liveSession.count+' boîte(s)';
+}
+function updateMonthTotalLive(){
+  const mk=monthKey(new Date());
+  const monthLogs=logs.filter(l=>l.date.slice(0,7)===mk && l.id!==liveSession.logId);
+  const total=monthLogs.reduce((s,l)=>s+l.count,0)+liveSession.count;
+  const objectif=effObjectif(mk);
+  const pct=objectif>0?Math.min(100,Math.round(total/objectif*100)):0;
+  const big=document.querySelector('.objcard .bignum');
+  if(big) big.innerHTML=`${total.toLocaleString('fr-FR')} <small>/ ${objectif.toLocaleString('fr-FR')}</small>`;
+  const p=document.querySelector('.objcard .pct');
+  if(p) p.textContent=`${pct}% de l'objectif · ${Math.max(0,objectif-total).toLocaleString('fr-FR')} restantes`;
+  const bar=document.querySelector('.objcard .bar > i');
+  if(bar) bar.style.width=pct+'%';
+}
+function scheduleLiveSave(){
+  clearTimeout(liveSaveT);
+  liveSaveT=setTimeout(async()=>{
+    if(liveSession.count<=0) return;
+    if(liveSession.logId){
+      const l=logs.find(x=>x.id===liveSession.logId);
+      if(l) l.count=liveSession.count; else liveSession.logId=null;
+    }
+    if(!liveSession.logId){
+      const id=uid('l'); logs.push({id,date:toISO(new Date()),count:liveSession.count,note:'Comptage'}); liveSession.logId=id;
+    }
+    await saveLogs();
+  },700);
+}
+async function finishSession(){
+  clearTimeout(liveSaveT);
+  if(liveSession.count>0){
+    if(liveSession.logId){ const l=logs.find(x=>x.id===liveSession.logId); if(l) l.count=liveSession.count; }
+    else logs.push({id:uid('l'),date:toISO(new Date()),count:liveSession.count,note:'Comptage'});
+    await saveLogs();
+    toast('Session enregistrée : +'+liveSession.count);
+  }
+  liveSession={count:0,logId:null};
+  renderObjectif();
+}
+async function addLog(n){
+  const d=new Date(monthCursor);
+  const today=new Date();
+  // si on est sur le mois courant, date = aujourd'hui ; sinon 1er du mois affiché
+  const dateStr = (monthKey(monthCursor)===monthKey(today)) ? toISO(today) : toISO(d);
+  logs.push({id:uid('l'),date:dateStr,count:n,note:''});
+  await saveLogs(); renderObjectif(); toast('+'+n+' boîtes');
+}
+async function delLog(id){ logs=logs.filter(l=>l.id!==id); await saveLogs(); renderObjectif(); }
+
+/* ===================== Panneau TOURNÉE ===================== */
+let tourSource='aboiter', tourStart='gps', tourScope='view', manualSet=new Set();
+function tourBaseBySource(){
+  if(tourSource==='all') return prospects.slice();
+  if(tourSource==='repasser') return prospects.filter(p=>isDue(p.dateRepasser));
+  return prospects.filter(p=>p.status==='aboiter');
+}
+function tourCandidates(){
+  let base=tourBaseBySource();
+  if(tourScope==='view'){ try{ const b=map.getBounds(); base=base.filter(p=>b.contains([p.lat,p.lng])); }catch(e){} }
+  else if(tourScope==='manual'){ base=base.filter(p=>manualSet.has(p.id)); }
+  return base;
+}
+function manualListHtml(){
+  const base=tourBaseBySource();
+  if(!base.length) return `<div class="hint" style="margin-bottom:12px">Aucun lieu pour ce filtre.</div>`;
+  return `<div class="field"><label>Coche les lieux de la tournée</label><div style="max-height:32vh;overflow:auto;border:1px solid var(--line);border-radius:11px;padding:2px 12px">`+
+    base.map(p=>`<label style="display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px"><input type="checkbox" data-pick="${p.id}" ${manualSet.has(p.id)?'checked':''} style="width:19px;height:19px">${esc(p.name)}</label>`).join('')+
+    `</div></div>`;
+}
+function renderTournee(){
+  const cand=tourCandidates();
+  let body=`
+    <div class="field"><label>Lieux à inclure</label>
+      <select id="tSource">
+        <option value="aboiter"${tourSource==='aboiter'?' selected':''}>À boiter uniquement</option>
+        <option value="repasser"${tourSource==='repasser'?' selected':''}>À repasser</option>
+        <option value="all"${tourSource==='all'?' selected':''}>Tous les lieux</option>
+      </select></div>
+    <div class="field"><label>Périmètre de la tournée</label>
+      <select id="tScope">
+        <option value="view"${tourScope==='view'?' selected':''}>Secteur visible à l'écran</option>
+        <option value="manual"${tourScope==='manual'?' selected':''}>Je choisis moi-même</option>
+        <option value="all"${tourScope==='all'?' selected':''}>Toute l'île</option>
+      </select></div>
+    ${tourScope==='manual'?manualListHtml():''}
+    <div class="field"><label>Point de départ</label>
+      <select id="tStart">
+        <option value="gps"${tourStart==='gps'?' selected':''}>Ma position (GPS)</option>
+        <option value="first"${tourStart==='first'?' selected':''}>Premier lieu de la liste</option>
+      </select></div>
+    <div class="hint" style="margin:-4px 0 12px"><b id="tCount">${cand.length}</b> lieu(x) dans la tournée. ${tourScope==='view'?'Zoome sur ta ville avant d\'ouvrir cet onglet pour ne garder que ce secteur.':''}</div>
+    <button class="btn btn-p btn-w" id="optBtn" style="margin-bottom:10px">⚡ Optimiser la tournée</button>`;
+  if(tour && tour.order.length){
+    const km=(tour.distance/1000);
+    const timeStr=tour.duration?` · ~${Math.round(tour.duration/60)} min`:'';
+    const distLabel=tour.road?`${km.toFixed(1)} km par la route`:`${km.toFixed(1)} km à vol d'oiseau`;
+    body+=`<div class="tourtotal"><b>${tour.order.length} arrêts</b> · ${distLabel}${timeStr}</div>
+      <button class="btn btn-p btn-w" id="navBtn" style="margin-bottom:8px">🧭 Itinéraire complet (Google Maps)</button>
+      <button class="btn btn-g btn-w" id="wazeBtn" style="margin-bottom:8px">Démarrer le 1ᵉʳ arrêt dans Waze</button>
+      <button class="btn btn-g btn-w" id="clrBtn" style="margin-bottom:14px">Effacer la tournée</button>
+      <div class="hint" style="margin:-6px 0 12px">Waze guide vers un arrêt à la fois : utilise le bouton Waze de chaque arrêt dans la liste ci-dessous.</div>
+      <div id="tStops"></div>`;
+  }
+  setSheet('Tournée optimisée', 'Organise ton secteur efficacement', body); openSheet();
+  document.getElementById('tSource').onchange=e=>{tourSource=e.target.value;renderTournee();};
+  document.getElementById('tScope').onchange=e=>{tourScope=e.target.value;renderTournee();};
+  document.getElementById('tStart').onchange=e=>{tourStart=e.target.value;};
+  document.querySelectorAll('[data-pick]').forEach(c=>c.onchange=()=>{ if(c.checked)manualSet.add(c.dataset.pick); else manualSet.delete(c.dataset.pick); const el=document.getElementById('tCount'); if(el)el.textContent=tourCandidates().length; });
+  document.getElementById('optBtn').onclick=optimizeTour;
+  if(tour && tour.order.length){
+    document.getElementById('navBtn').onclick=launchNav;
+    document.getElementById('wazeBtn').onclick=()=>{ const f=byId(tour.order[0]); window.open(`https://waze.com/ul?ll=${f.lat},${f.lng}&navigate=yes`,'_blank'); };
+    document.getElementById('clrBtn').onclick=()=>{tour=null;routeLayer.clearLayers();renderTournee();};
+    drawTourStops();
+  }
+}
+function drawTourStops(){
+  const el=document.getElementById('tStops'); if(!el)return;
+  el.innerHTML=tour.order.map((id,i)=>{
+    const p=prospects.find(x=>x.id===id); if(!p)return'';
+    const full=[p.cp,p.ville].filter(Boolean).join(' ');
+    return `<div class="tstop"><div class="sn">${i+1}</div><div class="si2" data-id="${id}"><b>${esc(p.name)}</b><span>${esc(full||p.addr||'')}</span></div><a class="act" style="flex:0 0 auto;padding:8px 11px" href="https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes" target="_blank" rel="noopener">Waze</a></div>`;
+  }).join('');
+  el.querySelectorAll('.si2').forEach(s=>s.onclick=()=>focusProspect(s.dataset.id));
+}
+function getPos(){
+  return new Promise(res=>{
+    if(!navigator.geolocation){res(null);return;}
+    navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude}),()=>res(null),{enableHighAccuracy:true,timeout:8000});
+  });
+}
+async function optimizeTour(){
+  const cand=tourCandidates();
+  if(cand.length<2){ toast('Il faut au moins 2 lieux'); return; }
+  toast('Optimisation…');
+  let start=null;
+  if(tourStart==='gps'){ start=await getPos(); if(!start) toast('GPS indisponible, départ = 1er lieu'); }
+  const pts=cand.map(p=>({id:p.id,lat:p.lat,lng:p.lng}));
+  const osrm = pts.length<=12 ? await tryOSRM(pts,start) : null;
+  if(osrm){
+    tour={order:osrm.order,distance:osrm.distance,duration:osrm.duration,geometry:osrm.geometry,road:true,start};
+  } else {
+    const order=optimizePath(pts,start);
+    let dist=0;
+    for(let i=0;i<order.length-1;i++){ dist+=haversine(byId(order[i]),byId(order[i+1])); }
+    if(start) dist+=haversine(start,byId(order[0]));
+    tour={order,distance:dist,road:false,start};
+    if(pts.length>12) toast('Beaucoup de points : ordre approché (vol d\'oiseau)');
+  }
+  drawRoute(); renderTournee();
+}
+async function tryOSRM(pts,start){
+  try{
+    const input=[]; if(start) input.push({id:'__start',lat:start.lat,lng:start.lng}); pts.forEach(p=>input.push(p));
+    const coordStr=input.map(p=>`${p.lng},${p.lat}`).join(';');
+    const url=`https://router.project-osrm.org/trip/v1/driving/${coordStr}?source=first&roundtrip=false&geometries=geojson&overview=full`;
+    const r=await fetch(url); const j=await r.json();
+    if(j.code!=='Ok' || !j.trips || !j.trips.length || !j.waypoints) return null;
+    const ordered=input.map((p,i)=>({p,idx:j.waypoints[i].waypoint_index})).sort((a,b)=>a.idx-b.idx).map(o=>o.p);
+    const order=ordered.filter(p=>p.id!=='__start').map(p=>p.id);
+    const geometry=(j.trips[0].geometry.coordinates||[]).map(c=>[c[1],c[0]]);
+    return {order, distance:j.trips[0].distance, duration:j.trips[0].duration, geometry};
+  }catch(e){ return null; }
+}
+function byId(id){ const p=prospects.find(x=>x.id===id); return {lat:p.lat,lng:p.lng}; }
+function haversine(a,b){
+  const R=6371000,r=Math.PI/180;
+  const dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+function optimizePath(pts,start){
+  // plus proche voisin
+  const remaining=pts.slice(); const order=[];
+  let cur=start || remaining[0];
+  if(!start){ order.push(remaining[0].id); cur=remaining.shift(); }
+  while(remaining.length){
+    let bi=0,bd=Infinity;
+    remaining.forEach((p,i)=>{const d=haversine(cur,p);if(d<bd){bd=d;bi=i;}});
+    cur=remaining.splice(bi,1)[0]; order.push(cur.id);
+  }
+  return twoOpt(order);
+}
+function twoOpt(order){
+  if(order.length<4) return order;
+  const D=(i,j)=>haversine(byId(order[i]),byId(order[j]));
+  let improved=true,pass=0;
+  while(improved && pass<40){
+    improved=false; pass++;
+    for(let i=0;i<order.length-1;i++){
+      for(let k=i+1;k<order.length;k++){
+        const a=i>0?D(i-1,i):0, b=k<order.length-1?D(k,k+1):0;
+        const c=i>0?haversine(byId(order[i-1]),byId(order[k])):0, d=k<order.length-1?haversine(byId(order[i]),byId(order[k+1])):0;
+        if(c+d+1e-6<a+b){ const seg=order.slice(i,k+1).reverse(); order.splice(i,seg.length,...seg); improved=true; }
+      }
+    }
+  }
+  return order;
+}
+function drawRoute(){
+  routeLayer.clearLayers();
+  if(!tour)return;
+  let line;
+  if(tour.road && tour.geometry && tour.geometry.length){ line=tour.geometry; }
+  else { line=[]; if(tour.start) line.push([tour.start.lat,tour.start.lng]); tour.order.forEach(id=>{const p=byId(id);line.push([p.lat,p.lng]);}); }
+  L.polyline(line,{color:'#13302c',weight:6,opacity:.22,lineCap:'round'}).addTo(routeLayer);
+  L.polyline(line,{color:'#f0552d',weight:3.5,opacity:.9,lineCap:'round'}).addTo(routeLayer);
+  tour.order.forEach((id,i)=>{
+    const p=byId(id);
+    L.marker([p.lat,p.lng],{zIndexOffset:1000,icon:L.divIcon({className:'',iconSize:[26,26],iconAnchor:[13,26],html:`<div class="rn-badge" style="background:#f0552d"><span>${i+1}</span></div>`})}).addTo(routeLayer);
+  });
+  if(tour.start) L.circleMarker([tour.start.lat,tour.start.lng],{radius:7,color:'#fff',weight:3,fillColor:'#1f6feb',fillOpacity:1}).addTo(routeLayer);
+}
+function launchNav(){
+  const stops=tour.order.map(byId);
+  const origin=tour.start? `${tour.start.lat},${tour.start.lng}` : `${stops[0].lat},${stops[0].lng}`;
+  const dest=stops[stops.length-1];
+  const mids=tour.start? stops : stops.slice(1);
+  const way=mids.slice(0,-1); // tous sauf destination
+  let wp=way.slice(0,9).map(s=>`${s.lat},${s.lng}`).join('|'); // Google: ~9 étapes max via URL
+  let url=`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest.lat},${dest.lng}&travelmode=driving`;
+  if(wp) url+=`&waypoints=${encodeURIComponent(wp)}`;
+  if(way.length>9) toast('Google Maps limite à ~10 arrêts : les premiers sont envoyés');
+  window.open(url,'_blank');
+}
+
+/* ===================== Panneau PLUS ===================== */
+function renderPlus(){
+  const body=`
+    <div class="srow"><div class="si">${ICN.dl}</div><div class="st"><b>Sauvegarde (export)</b><p>Enregistre toutes tes données dans un fichier. À garder précieusement.</p></div><button id="expJson">Exporter</button></div>
+    <div class="srow"><div class="si">${ICN.up}</div><div class="st"><b>Restaurer (import)</b><p>Recharge une sauvegarde, ou transfère vers un autre appareil.</p></div><button id="impJson">Importer</button></div>
+    <div class="srow"><div class="si">${ICN.sheet}</div><div class="st"><b>Export Excel (CSV)</b><p>Liste de tes lieux ouvrable dans Excel / Sheets.</p></div><button id="expCsv">CSV</button></div>
+    <div class="secttl">Synchronisation</div>
+    <div class="hint" style="line-height:1.6">
+      <b>Mode en ligne (recommandé, sync automatique) :</b> ouvre cette app <b>depuis l'app Claude</b>, connecté à ton compte. Tes données sont alors enregistrées en ligne sur ton compte et se retrouvent automatiquement sur tous tes appareils (téléphone, tablette) — sans transfert. Les changements de l'autre appareil apparaissent quand tu reviens sur l'app.<br><br>
+      <b>Mode hors-ligne (icône sur l'écran d'accueil) :</b> pratique en plein écran sur le terrain même sans réseau, mais les données restent sur l'appareil. Dans ce cas, utilise Export/Import pour passer de l'un à l'autre.<br><br>
+      Dans tous les cas, fais un <b>Export</b> de temps en temps comme sauvegarde de sécurité.
+    </div>`;
+  setSheet('Plus','Sauvegarde & réglages',body); openSheet();
+  document.getElementById('expJson').onclick=exportJson;
+  document.getElementById('impJson').onclick=()=>document.getElementById('file').click();
+  document.getElementById('expCsv').onclick=exportCsv;
+}
+function exportJson(){
+  const data={version:2,exported:new Date().toISOString(),prospects,zones,logs,objectifs,baseObjectif,objectif:baseObjectif};
+  download('boitage-sauvegarde-'+toISO(new Date())+'.json', JSON.stringify(data,null,2), 'application/json');
+  toast('Sauvegarde exportée');
+}
+document.getElementById('file').onchange=async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(!confirm('Remplacer les données actuelles par cette sauvegarde ?'))return;
+    prospects=d.prospects||[]; zones=d.zones||[]; logs=d.logs||[];
+    objectifs=d.objectifs||{}; baseObjectif=d.baseObjectif ?? d.objectif ?? baseObjectif;
+    await saveProspects(); await saveZones(); await saveLogs(); await saveObj();
+    renderMarkers(); renderZones(); renderPlus(); toast('Sauvegarde importée');
+  }catch(err){ toast('Fichier invalide'); }
+  e.target.value='';
+};
+function exportCsv(){
+  if(!prospects.length){toast('Aucun lieu à exporter');return;}
+  const cols=['name','addr','cp','ville','url','dateBoiter','dateBoite','dateRepasser','status','prio','notes','lat','lng'];
+  const head=['Nom','Adresse','CP','Ville','Annonce','À boiter','Boité le','Repasser','Statut','Priorité','Notes','Lat','Lng'];
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows=prospects.map(p=>cols.map(c=>q(c==='status'?STATUSES[p.status].label:c==='prio'?PRIO[p.prio]:p[c])).join(','));
+  download('lieux-boitage.csv','\ufeff'+head.map(q).join(',')+'\n'+rows.join('\n'),'text/csv;charset=utf-8');
+  toast('CSV exporté');
+}
+
+/* ===================== Géoloc utilisateur (suivi temps réel) ===================== */
+document.getElementById('locateBtn').onclick=()=>{
+  if(!navigator.geolocation){toast('Géolocalisation non disponible');return;}
+  if(liveTracking){ stopTracking(); return; }
+  liveTracking=true;
+  document.getElementById('locateBtn').style.background='var(--accent)';
+  document.getElementById('locateBtn').style.color='#fff';
+  toast('Suivi de position activé');
+  let first=true;
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    const ll=[pos.coords.latitude,pos.coords.longitude];
+    if(!posMarker){
+      posMarker=L.circleMarker(ll,{radius:8,color:'#fff',weight:3,fillColor:'#1f6feb',fillOpacity:1}).addTo(map);
+      posAccuracy=L.circle(ll,{radius:pos.coords.accuracy||30,color:'#1f6feb',weight:1,fillColor:'#1f6feb',fillOpacity:.12}).addTo(map);
+    } else { posMarker.setLatLng(ll); posAccuracy.setLatLng(ll).setRadius(pos.coords.accuracy||30); }
+    if(first){ map.flyTo(ll,16,{duration:.8}); first=false; }
+  },()=>{ toast('Position introuvable'); stopTracking(); },{enableHighAccuracy:true,maximumAge:2000,timeout:10000});
+};
+function stopTracking(){
+  liveTracking=false;
+  if(watchId!=null){ navigator.geolocation.clearWatch(watchId); watchId=null; }
+  document.getElementById('locateBtn').style.background='';
+  document.getElementById('locateBtn').style.color='';
+  toast('Suivi désactivé');
+}
+
+/* ===================== FAB ===================== */
+document.getElementById('fab').onclick=()=>{
+  if(mode==='place'){ setMode('normal'); return; }
+  if(mode==='draw'){ return; }
+  closeSheet(); draftLatLng=null; setMode('place'); toast('Touche la carte à l\'endroit du repère');
+};
+
+/* ===================== Recherche (adresse + filtre liste) ===================== */
+document.getElementById('search').oninput=()=>{ if(document.getElementById('sheet').classList.contains('show')&&document.getElementById('lieuxList')) drawLieuxList(); };
+document.getElementById('search').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); doAddressSearch(); document.getElementById('search').blur(); } });
+function searchIcon(){
+  return L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,34],popupAnchor:[0,-32],
+    html:`<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#f0552d;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-weight:800;font-size:15px;font-family:Bricolage Grotesque">?</span></div>`});
+}
+/* Géocodeur : Base Adresse Nationale (officiel FR, couvre La Réunion) puis OpenStreetMap en secours */
+async function geocodeBest(query){
+  try{
+    const r=await fetch('https://api-adresse.data.gouv.fr/search/?limit=1&q='+encodeURIComponent(query));
+    const j=await r.json();
+    if(j.features && j.features.length){
+      const f=j.features[0];
+      return {lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0], label:f.properties.label};
+    }
+  }catch(e){}
+  try{
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=re&q='+encodeURIComponent(query),{headers:{'Accept-Language':'fr'}});
+    const j=await r.json();
+    if(j && j.length) return {lat:+j[0].lat,lng:+j[0].lon,label:j[0].display_name};
+  }catch(e){}
+  return null;
+}
+async function doAddressSearch(){
+  const q=gv('search').trim();
+  if(!q){ toast('Tape une adresse'); return; }
+  lastSearchQuery=q; toast('Recherche…');
+  let res=await geocodeBest(q), approx=false;
+  if(!res){ const noNum=q.replace(/^\s*\d+\s*/,''); if(noNum!==q){ res=await geocodeBest(noNum); approx=!!res; } }
+  if(!res){ toast('Adresse introuvable — touche la carte pour poser le repère'); return; }
+  const {lat,lng,label}=res;
+  if(searchMarker) map.removeLayer(searchMarker);
+  searchMarker=L.marker([lat,lng],{icon:searchIcon(),zIndexOffset:2000}).addTo(map);
+  searchMarker.bindPopup(`<div class="pop"><h3>${esc(q)}</h3><div class="pa">${esc((label||'').slice(0,60))}</div><div class="pbtns"><button class="pg" onclick="addHere(${lat},${lng})">＋ Ajouter ce lieu ici</button></div></div>`).openPopup();
+  map.flyTo([lat,lng],17,{duration:.7});
+  if(approx) setTimeout(()=>toast('Numéro non localisé : ajuste en touchant la carte si besoin'),900);
+}
+window.addHere=(lat,lng)=>{
+  if(searchMarker){ map.removeLayer(searchMarker); searchMarker=null; }
+  draftLatLng={lat,lng}; openProspectFormWith(null);
+  const a=document.getElementById('f-addr'); if(a && lastSearchQuery) a.value=lastSearchQuery;
+};
+
+/* ===================== Helpers ===================== */
+function gv(id){const e=document.getElementById(id);return e?e.value:'';}
+function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function normUrl(u){u=String(u||'').trim();if(!u)return'';if(!/^https?:\/\//i.test(u))u='https://'+u;return u;}
+function zdates(z){
+  const d=[];
+  if(z.datePrevu)d.push('prévu '+fdate(z.datePrevu));
+  if(z.dateFait)d.push('boîté '+fdate(z.dateFait));
+  if(z.dateRepasser)d.push('↻ '+fdate(z.dateRepasser));
+  if(z.dateRepasse)d.push('repassé '+fdate(z.dateRepasse));
+  return d.length?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${d.join(' · ')}</div>`:'';
+}
+function toISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fdate(s){if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;}
+function isDue(s){if(!s)return false;return s<=toISO(new Date());}
+let toastT;
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2500);}
+function download(name,content,type){const b=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+
+/* ===================== Légende ===================== */
+function openLegend(){
+  const lieux=Object.entries(STATUSES).map(([k,v])=>`<div class="legrow"><span class="lsw" style="background:${v.hex}"></span>${v.label}</div>`).join('');
+  const zns=Object.entries(ZSTATUS).map(([k,v])=>`<div class="legrow"><span class="lsq" style="background:${v.hex}"></span>Zone : ${v.label}</div>`).join('');
+  const body=`
+    <div class="rep-h">Repères (lieux)</div>${lieux}
+    <div class="rep-h">Zones</div>${zns}
+    <div class="legtoggle">Carte de chaleur des résultats<button class="switch ${heatOn?'on':''}" id="heatSw"><i></i></button></div>
+    <div class="hint">Les zones de chaleur montrent où tu as obtenu des RDV (orange) et des clients (rouge), pour repérer les secteurs qui convertissent.</div>`;
+  setSheet('Légende & carte','Couleurs et affichage',body); openSheet();
+  document.getElementById('heatSw').onclick=()=>{ toggleHeat(); document.getElementById('heatSw').classList.toggle('on',heatOn); };
+}
+
+/* ===================== À faire aujourd'hui ===================== */
+function todoItems(){
+  const today=toISO(new Date());
+  const pros=prospects.filter(p=> (p.dateBoiter && p.dateBoiter<=today && p.status==='aboiter') || (p.dateRepasser && p.dateRepasser<=today && p.status!=='perdu' && p.status!=='client'));
+  const zos=zones.filter(z=> (z.datePrevu && z.datePrevu<=today && z.status!=='done') || (z.dateRepasser && z.dateRepasser<=today && z.status!=='done'));
+  return {pros,zos};
+}
+function renderTodoBanner(){
+  const bar=document.getElementById('todobar'); if(!bar) return;
+  if(todoDismissed){ bar.classList.remove('show'); return; }
+  const {pros,zos}=todoItems(); const n=pros.length+zos.length;
+  if(n>0){ document.getElementById('todoText').textContent=`${n} chose(s) à faire aujourd'hui`; bar.classList.add('show'); }
+  else bar.classList.remove('show');
+}
+function openTodo(){
+  const {pros,zos}=todoItems();
+  let body='';
+  if(pros.length){
+    body+=`<div class="secttl">Lieux <span>${pros.length}</span></div>`+pros.map(p=>{
+      const s=STATUSES[p.status]||STATUSES.aboiter;
+      const why=(p.dateRepasser&&isDue(p.dateRepasser)&&p.status!=='aboiter')?'À repasser le '+fdate(p.dateRepasser):'À boiter le '+fdate(p.dateBoiter||'');
+      return `<div class="card" data-id="${p.id}" style="--cc:${s.hex}"><div class="top"><div class="nm">${esc(p.name)}</div></div><div class="dates"><span class="dt warn">${why}</span></div></div>`;
+    }).join('');
+  }
+  if(zos.length){
+    body+=`<div class="secttl">Zones <span>${zos.length}</span></div>`+zos.map(z=>{
+      const s=ZSTATUS[z.status]||ZSTATUS.todo;
+      const why=(z.dateRepasser&&isDue(z.dateRepasser))?'À repasser le '+fdate(z.dateRepasser):'Prévu le '+fdate(z.datePrevu||'');
+      return `<div class="zcard"><span class="zsw" style="background:${s.hex}"></span><div class="zn"><b>${esc(z.name)}</b><span>${why}</span></div></div>`;
+    }).join('');
+  }
+  if(!body) body=`<div class="empty"><span class="big">✓</span>Rien de prévu aujourd'hui.<br>Bonne tournée !</div>`;
+  setSheet("À faire aujourd'hui", new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}), body); openSheet();
+  document.querySelectorAll('#sheetBody .card').forEach(c=>c.onclick=()=>focusProspect(c.dataset.id));
+}
+
+/* ===================== Rapport mensuel ===================== */
+function openReport(d){
+  const mk=monthKey(d);
+  const boxes=logs.filter(l=>l.date.slice(0,7)===mk).reduce((s,l)=>s+l.count,0);
+  const obj=effObjectif(mk); const pct=obj>0?Math.round(boxes/obj*100):0;
+  const sc={}; Object.keys(STATUSES).forEach(k=>sc[k]=prospects.filter(p=>p.status===k).length);
+  const rdvClients=(sc.rdv||0)+(sc.client||0);
+  const ratio=rdvClients>0?Math.round(boxes/rdvClients):null;
+  const zc={}; Object.keys(ZSTATUS).forEach(k=>zc[k]=zones.filter(z=>z.status===k).length);
+  const inner=`
+    <div class="rep-h">Boîtage du mois</div>
+    <div class="rep-stat"><span>Boîtes distribuées</span><b>${boxes.toLocaleString('fr-FR')}</b></div>
+    <div class="rep-stat"><span>Objectif du mois</span><b>${obj.toLocaleString('fr-FR')}</b></div>
+    <div class="rep-stat"><span>Objectif atteint</span><b>${pct}%</b></div>
+    <div class="rep-h">Lieux (état actuel)</div>
+    ${Object.entries(STATUSES).map(([k,v])=>`<div class="rep-stat"><span>${v.label}</span><b>${sc[k]||0}</b></div>`).join('')}
+    ${ratio?`<div class="rep-stat"><span>Boîtes par RDV/client</span><b>${ratio}</b></div>`:''}
+    <div class="rep-h">Zones (état actuel)</div>
+    ${Object.entries(ZSTATUS).map(([k,v])=>`<div class="rep-stat"><span>${v.label}</span><b>${zc[k]||0}</b></div>`).join('')}`;
+  const body=`${inner}<div class="formfoot" style="margin-top:18px"><button class="btn btn-g" id="repBack">Retour</button><button class="btn btn-p" id="repPrint">Imprimer / PDF</button></div>`;
+  setSheet('Rapport mensuel', monthLabel(d), body); openSheet();
+  document.getElementById('repBack').onclick=()=>openTab('objectif');
+  document.getElementById('repPrint').onclick=()=>printReport(monthLabel(d),inner);
+}
+function printReport(title,inner){
+  const w=window.open('','_blank');
+  if(!w){ toast('Autorise les pop-up pour exporter le PDF'); return; }
+  w.document.write(`<html><head><meta charset="utf-8"><title>Rapport ${title}</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:26px;color:#13302c;max-width:640px;margin:auto}h1{font-size:21px;margin-bottom:4px}.rep-stat{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #e2dccd}.rep-h{font-weight:700;margin:20px 0 4px;font-size:15px}b{font-size:16px}.f{margin-top:26px;color:#999;font-size:12px}</style></head><body><h1>Rapport boîtage — ${title}</h1>${inner}<p class="f">Généré le ${new Date().toLocaleDateString('fr-FR')} · Boîtage Ouest Réunion</p></body></html>`);
+  w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(e){}},350);
+}
+
+document.getElementById('legendBtn').onclick=openLegend;
+document.getElementById('todoGo').onclick=openTodo;
+document.getElementById('todoX').onclick=()=>{ todoDismissed=true; document.getElementById('todobar').classList.remove('show'); };
+
+/* ===================== Sync : rechargement quand l'app reprend le focus ===================== */
+async function reloadFromStore(){
+  // ne pas écraser une saisie en cours
+  if(document.getElementById('sheet').classList.contains('show')) return;
+  if(mode!=='normal') return;
+  try{ const p=await Store.get('boitage_prospects'); if(p)prospects=JSON.parse(p); }catch(e){}
+  try{ const z=await Store.get('boitage_zones'); if(z)zones=JSON.parse(z); }catch(e){}
+  try{ const l=await Store.get('boitage_logs'); if(l)logs=JSON.parse(l); }catch(e){}
+  try{ const o=await Store.get('boitage_objectif'); if(o)baseObjectif=parseInt(o,10)||baseObjectif; }catch(e){}
+  try{ const om=await Store.get('boitage_objectifs'); if(om)objectifs=JSON.parse(om); }catch(e){}
+  renderZones(); renderMarkers(); renderTodoBanner();
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reloadFromStore(); });
+window.addEventListener('focus',reloadFromStore);
+
+/* ===================== Boot ===================== */
+(async function(){
+  initMap();
+  try{ const p=await Store.get('boitage_prospects'); if(p)prospects=JSON.parse(p); }catch(e){}
+  try{ const z=await Store.get('boitage_zones'); if(z)zones=JSON.parse(z); }catch(e){}
+  try{ const l=await Store.get('boitage_logs'); if(l)logs=JSON.parse(l); }catch(e){}
+  try{ const o=await Store.get('boitage_objectif'); if(o)baseObjectif=parseInt(o,10)||baseObjectif; }catch(e){}
+  try{ const om=await Store.get('boitage_objectifs'); if(om)objectifs=JSON.parse(om); }catch(e){}
+  renderZones(); renderMarkers(); renderTodoBanner();
+  if(prospects.length){ try{ map.fitBounds(L.latLngBounds(prospects.map(p=>[p.lat,p.lng])).pad(.25)); }catch(e){} }
+})();
+</script>
+</body>
+</html>
